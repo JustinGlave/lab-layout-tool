@@ -35,6 +35,7 @@ from .components import (
     NoScrollComboBox,
     NoScrollSpinBox,
     Panel,
+    PhoenixTable,
     PrimaryButton,
     SecondaryButton,
     SectionTitle,
@@ -115,12 +116,10 @@ class PBCEditor(QWidget):
             "Check the valves this PBC controls and pick which COM trunk each lives on."
         ))
 
-        self.valves_table = QTableWidget(0, 4)
+        # PhoenixTable applies the read-only / no-selection / no-focus
+        # defaults shared across the design system. Don't reinvent them.
+        self.valves_table = PhoenixTable(0, 4)
         self.valves_table.setHorizontalHeaderLabels(["Tag", "Variant", "Link", "COM"])
-        self.valves_table.verticalHeader().setVisible(False)
-        self.valves_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.valves_table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
-        self.valves_table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.valves_table.setMinimumHeight(160)
         header = self.valves_table.horizontalHeader()
         # Fixed widths on Tag / Link / COM so the dropdown widgets in those

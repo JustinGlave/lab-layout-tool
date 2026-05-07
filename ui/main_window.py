@@ -17,7 +17,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, Qt, QThread, Signal
+from PySide6.QtCore import QDate, QSettings, Qt, QThread, Signal
 from PySide6.QtGui import QAction, QCursor, QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -48,6 +48,7 @@ from cad.blocks import BlockVariant, ProductLine, list_variants, resolve_block_p
 from .components import (
     HintLabel,
     NoScrollComboBox,
+    NoScrollDateEdit,
     NoScrollSpinBox,
     PageSubtitle,
     PageTitle,
@@ -446,13 +447,9 @@ class MainWindow(QMainWindow):
         exit_act.triggered.connect(self.close)
         file_menu.addAction(exit_act)
 
-        edit_menu = mb.addMenu("Edit")
-        edit_menu.addAction(QAction("Undo", self, enabled=False))
-        edit_menu.addAction(QAction("Redo", self, enabled=False))
-        edit_menu.addSeparator()
-        edit_menu.addAction(QAction("Cut", self, enabled=False))
-        edit_menu.addAction(QAction("Copy", self, enabled=False))
-        edit_menu.addAction(QAction("Paste", self, enabled=False))
+        # (No Edit menu yet — Undo/Redo/Cut/Copy/Paste aren't wired and
+        # showing them as permanently-disabled looks broken. Add the menu
+        # back when there's something it can actually do.)
 
         view_menu = mb.addMenu("View")
         refresh_act = QAction("Refresh Block Library", self)
@@ -583,10 +580,14 @@ class MainWindow(QMainWindow):
         self.technician.setMinimumHeight(32)
         meta_form.addRow("Technician", self.technician)
 
-        self.date = QLineEdit()
-        self.date.setPlaceholderText("MM/DD/YYYY")
+        # QDateEdit with calendar popup — better than free-text MM/DD/YYYY
+        # which let users type "next Tuesday" and have it land in the title
+        # block. Wheel-disabled per the form's no-scroll-by-default rule.
+        self.date = NoScrollDateEdit()
+        self.date.setDisplayFormat("MM/dd/yyyy")
+        self.date.setCalendarPopup(True)
+        self.date.setDate(QDate.currentDate())
         self.date.setMinimumHeight(32)
-        self.date.setText(datetime.now().strftime("%m/%d/%Y"))
         meta_form.addRow("Date", self.date)
 
         self.product_combo = NoScrollComboBox()
@@ -613,6 +614,9 @@ class MainWindow(QMainWindow):
         # Room tabs
         self.room_tabs = QTabWidget()
         self.room_tabs.setTabsClosable(False)
+        # Long room names get clipped with an ellipsis instead of pushing the
+        # tab bar past the panel width and forcing horizontal scroll arrows.
+        self.room_tabs.tabBar().setElideMode(Qt.TextElideMode.ElideRight)
         self.room_tabs.currentChanged.connect(self._refresh_tree)
         editor_layout.addWidget(self.room_tabs, 1)
 
@@ -682,14 +686,12 @@ class MainWindow(QMainWindow):
             idx = self.room_tabs.count()
             default = f"LAB {idx + 1:03d}"
             room = RoomEditor(default_name=default)
-            room.changed.connect(self._refresh_tree)
-            # Use a sender-based slot rather than a lambda capturing `room`.
-            # The lambda captured the RoomEditor reference; Qt auto-disconnects
-            # on deleteLater, but in the brief window before deletion any
-            # queued signal could fire the lambda with a half-deleted widget,
-            # risking `RuntimeError: wrapped C/C++ object has been deleted`
-            # on Qt 6. sender() resolves at signal-emit time and is None for
-            # an already-destroyed sender.
+            # Hook `changed` (any field) to a sender-based slot that refreshes
+            # the tab label badge (valve count) AND the sidebar tree. Hooking
+            # the bare `_refresh_tree` would lose the per-room badge update.
+            # Use sender-based slots (not lambdas capturing `room`) so a queued
+            # signal during deleteLater can't fire on a half-destroyed widget.
+            room.changed.connect(self._on_room_changed)
             room.name_changed.connect(self._on_room_name_changed)
             self.room_tabs.addTab(room, default)
             self._apply_current_product_to_room(room)
@@ -720,6 +722,15 @@ class MainWindow(QMainWindow):
                 return True
         return False
 
+    def _on_room_changed(self):
+        """Slot for RoomEditor.changed (anything inside the room form).
+        Refreshes both the tab label (valve count badge) and the sidebar
+        tree. Uses sender() so a queued signal during deleteLater can't
+        fire on a half-destroyed widget."""
+        room = self.sender()
+        if isinstance(room, RoomEditor):
+            self._update_tab_label(room)
+
     def _on_room_name_changed(self):
         """Slot for RoomEditor.name_changed. Resolves sender at emit time so
         we don't hold a Python reference to a possibly-destroyed widget."""
@@ -730,8 +741,26 @@ class MainWindow(QMainWindow):
     def _update_tab_label(self, room: RoomEditor):
         idx = self.room_tabs.indexOf(room)
         if idx >= 0:
-            label = room.room_name() or f"Room {idx + 1}"
-            self.room_tabs.setTabText(idx, label)
+            base = room.room_name() or f"Room {idx + 1}"
+            # Append a valve count badge so it's obvious at a glance which
+            # rooms are populated. Use room.collect() so the count includes
+            # PBCs (which show as "+N" if any). Wrap in try/except — collect()
+            # touches a lot of widgets and shouldn't be allowed to break the
+            # tab text update.
+            badge = ""
+            try:
+                data = room.collect()
+                v = sum(len(data.get(c, []) or []) for c in ("SAV", "GEX", "FEV", "AUX"))
+                p = len(data.get("pbcs", []) or [])
+                if v == 0 and p == 0:
+                    badge = " (empty)"
+                elif p > 0:
+                    badge = f" ({v} valves, {p} PBC{'s' if p != 1 else ''})"
+                else:
+                    badge = f" ({v} valve{'s' if v != 1 else ''})"
+            except Exception:  # noqa: BLE001
+                pass
+            self.room_tabs.setTabText(idx, base + badge)
         self._refresh_tree()
 
     def _apply_current_product_to_room(self, room: RoomEditor):
@@ -832,7 +861,7 @@ class MainWindow(QMainWindow):
             self.office.setText("ATS Automation Inc.")
             self.revision.setText("Record Drawing Set")
             self.technician.clear()
-            self.date.setText(datetime.now().strftime("%m/%d/%Y"))
+            self.date.setDate(QDate.currentDate())
             self.room_count.setValue(1)
             for room in self._rooms():
                 room.name_edit.clear()
@@ -923,7 +952,9 @@ class MainWindow(QMainWindow):
             self.office.setText(data.get("office", "") or "ATS Automation Inc.")
             self.revision.setText(data.get("revision", "") or "Record Drawing Set")
             self.technician.setText(data.get("technician", ""))
-            self.date.setText(data.get("date", "") or datetime.now().strftime("%m/%d/%Y"))
+            saved_date = data.get("date", "") or ""
+            qd = QDate.fromString(saved_date, "MM/dd/yyyy") if saved_date else QDate()
+            self.date.setDate(qd if qd.isValid() else QDate.currentDate())
             pid = data.get("product_line")
             for i in range(self.product_combo.count()):
                 pl = self.product_combo.itemData(i)

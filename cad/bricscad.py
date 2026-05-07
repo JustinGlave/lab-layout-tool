@@ -44,16 +44,45 @@ class CadSession:
 
 
 def connect(visible: bool = True) -> CadSession:
+    """Connect to BricsCAD (preferred) or AutoCAD.
+
+    Tries each ProgID in order; falls through to the next ONLY if Dispatch
+    itself fails (CAD app not installed / COM not registered). Once Dispatch
+    succeeds we commit to that app — if accessing the active document fails
+    we open a new empty one rather than silently switching to a different
+    CAD app, which would change file format and behavior under the user.
+    """
     last_err: Exception | None = None
     for prog_id in PROG_IDS:
+        # Phase 1: try to bind to this CAD app via COM. If Dispatch fails,
+        # the app isn't installed or registered — try the next ProgID.
         try:
             app = win32com.client.Dispatch(prog_id)
-            app.Visible = visible
-            return CadSession(app=app, doc=app.ActiveDocument, model_space=app.ActiveDocument.ModelSpace)
         except Exception as e:  # noqa: BLE001
             last_err = e
+            continue
+
+        # Phase 2: we have a live app handle. Stick with it. A missing
+        # ActiveDocument just means the user has BricsCAD/AutoCAD running
+        # with no drawing open — proactively create one instead of falling
+        # through to the next CAD app (which would silently swap, e.g.,
+        # BricsCAD for AutoCAD on a system with both installed).
+        try:
+            app.Visible = visible
+            try:
+                doc = app.ActiveDocument
+            except Exception:  # noqa: BLE001
+                doc = app.Documents.Add()
+            return CadSession(app=app, doc=doc, model_space=doc.ModelSpace)
+        except Exception as e:  # noqa: BLE001
+            raise CadError(
+                f"Connected to {prog_id} via COM but couldn't open an "
+                f"active document: {e}"
+            ) from e
+
     raise CadError(
-        f"Could not connect to BricsCAD or AutoCAD via COM. Last error: {last_err}"
+        f"Could not connect to BricsCAD or AutoCAD via COM. "
+        f"Is one of them installed? Last error: {last_err}"
     )
 
 

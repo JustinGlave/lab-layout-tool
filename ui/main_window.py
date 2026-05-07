@@ -582,6 +582,39 @@ class MainWindow(QMainWindow):
 
     def _sync_rooms_to_count(self):
         target = self.room_count.value()
+        current = self.room_tabs.count()
+
+        # Removing rooms that contain user data (valves or PBCs) is
+        # destructive and not undoable. Confirm first; revert the spinbox
+        # silently if the user backs out.
+        if target < current:
+            doomed_with_data: list[str] = []
+            for i in range(target, current):
+                room = self.room_tabs.widget(i)
+                if isinstance(room, RoomEditor) and self._room_has_data(room):
+                    label = self.room_tabs.tabText(i) or f"Room {i + 1}"
+                    doomed_with_data.append(label)
+            if doomed_with_data:
+                n = len(doomed_with_data)
+                names = ", ".join(doomed_with_data[:5])
+                if n > 5:
+                    names += f", and {n - 5} more"
+                resp = QMessageBox.question(
+                    self,
+                    "Discard rooms?",
+                    f"Reducing the room count will permanently discard "
+                    f"{n} room{'s' if n != 1 else ''} that contain valves "
+                    f"or PBCs:\n\n{names}\n\nContinue?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if resp != QMessageBox.StandardButton.Yes:
+                    # Revert without re-firing valueChanged (would loop the prompt)
+                    self.room_count.blockSignals(True)
+                    self.room_count.setValue(current)
+                    self.room_count.blockSignals(False)
+                    return
+
         # Add rooms if needed
         while self.room_tabs.count() < target:
             idx = self.room_tabs.count()
@@ -599,6 +632,24 @@ class MainWindow(QMainWindow):
             if w is not None:
                 w.deleteLater()
         self._refresh_tree()
+
+    def _room_has_data(self, room: RoomEditor) -> bool:
+        """True if the room has any user-entered valves or PBCs.
+
+        Used by _sync_rooms_to_count to decide whether to confirm a
+        destructive room removal. The room name alone (auto-generated
+        default like 'LAB 001') doesn't count.
+        """
+        try:
+            data = room.collect()
+        except Exception:  # noqa: BLE001
+            return True  # err on the side of confirming
+        if data.get("pbcs"):
+            return True
+        for cat in ("SAV", "GEX", "FEV", "AUX"):
+            if data.get(cat):
+                return True
+        return False
 
     def _update_tab_label(self, room: RoomEditor):
         idx = self.room_tabs.indexOf(room)

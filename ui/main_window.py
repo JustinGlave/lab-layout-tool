@@ -323,6 +323,67 @@ class _UpdateChecker(QThread):
             self.found.emit(info)
 
 
+# ── Generation worker ─────────────────────────────────────────────────────────
+
+
+class _GenerationWorker(QThread):
+    """Runs app.py:generate(project) on a background thread so the GUI stays
+    responsive during the multi-second BricsCAD COM round-trips. Emits
+    finished_ok(out_path) on success or failed(exc) on any exception."""
+
+    finished_ok = Signal(object)  # Path
+    failed = Signal(object)       # Exception
+
+    def __init__(self, on_generate, project, parent=None):
+        super().__init__(parent)
+        self._on_generate = on_generate
+        self._project = project
+
+    def run(self) -> None:
+        try:
+            # COM is apartment-threaded — every thread that touches it must
+            # initialise its own apartment. Without this, the BricsCAD
+            # Dispatch call inside _on_generate raises CoInitialize-not-called.
+            import pythoncom  # type: ignore
+            pythoncom.CoInitialize()
+            try:
+                out_path = self._on_generate(self._project)
+                self.finished_ok.emit(out_path)
+            finally:
+                try:
+                    pythoncom.CoUninitialize()
+                except Exception:  # noqa: BLE001
+                    pass
+        except Exception as exc:  # noqa: BLE001
+            self.failed.emit(exc)
+
+
+def _humanize_error(exc: Exception) -> str:
+    """Render a generation exception into a sentence the user can act on.
+
+    pywintypes.com_error has the actual BricsCAD complaint buried in
+    excepinfo[2] (the `description` field of the EXCEPINFO struct). The
+    raw string repr is just the HRESULT, which is useless to a user.
+    """
+    try:
+        import pywintypes  # type: ignore
+        if isinstance(exc, pywintypes.com_error):
+            parts: list[str] = []
+            info = getattr(exc, "excepinfo", None)
+            if info and len(info) >= 3 and info[2]:
+                parts.append(str(info[2]).strip().rstrip("."))
+            strerr = getattr(exc, "strerror", None)
+            if strerr:
+                parts.append(str(strerr).strip().rstrip("."))
+            if not parts:
+                hr = getattr(exc, "hresult", 0) & 0xFFFFFFFF
+                parts.append(f"COM error 0x{hr:08X}")
+            return "BricsCAD reported an error:\n\n" + "\n".join(parts)
+    except Exception:  # noqa: BLE001
+        pass
+    return f"{type(exc).__name__}: {exc}"
+
+
 # ── Main window ───────────────────────────────────────────────────────────────
 
 
@@ -378,6 +439,7 @@ class MainWindow(QMainWindow):
         gen_act.setShortcut("Ctrl+G")
         gen_act.triggered.connect(self._generate)
         file_menu.addAction(gen_act)
+        self._gen_act = gen_act
 
         file_menu.addSeparator()
         exit_act = QAction("Exit", self)
@@ -958,6 +1020,11 @@ class MainWindow(QMainWindow):
         return errors, warnings
 
     def _generate(self):
+        # Reject re-entry while a worker is already running. The gen button
+        # and menu action are also disabled below, but defense in depth.
+        if getattr(self, "_gen_worker", None) is not None:
+            return
+
         proj = self._collect_project()
 
         # Pre-flight validation. Errors block; warnings prompt to continue.
@@ -986,14 +1053,64 @@ class MainWindow(QMainWindow):
             if resp != QMessageBox.StandardButton.Yes:
                 return
 
-        try:
-            self.statusBar().showMessage("Generating drawing in BricsCAD…")
-            QApplication.processEvents()
-            out_path = self._on_generate(proj)
-            self.statusBar().showMessage(f"Drawing saved to {out_path}", 8000)
-        except Exception as e:  # noqa: BLE001
-            QMessageBox.critical(self, "Generation failed", str(e))
-            self.statusBar().showMessage("Generation failed", 5000)
+        # Move generation to a worker thread so the GUI stays responsive
+        # during the multi-second BricsCAD COM burst. A non-cancellable
+        # progress dialog blocks meaningful interaction with the form
+        # (preventing mid-flight edits to `proj`) while keeping the window
+        # repaintable and movable.
+        self.statusBar().showMessage("Generating drawing in BricsCAD…")
+        self.gen_btn.setEnabled(False)
+        self._gen_act.setEnabled(False)
+
+        self._gen_dialog = QProgressDialog(
+            "Generating drawing in BricsCAD…\n"
+            "This usually takes 10–30 seconds; large projects can take longer.",
+            None,            # no cancel button — COM calls can't be interrupted cleanly
+            0, 0,            # busy indicator (indeterminate progress)
+            self,
+        )
+        self._gen_dialog.setWindowTitle("Generating…")
+        self._gen_dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self._gen_dialog.setMinimumDuration(0)
+        self._gen_dialog.setAutoClose(False)
+        self._gen_dialog.setAutoReset(False)
+
+        self._gen_worker = _GenerationWorker(self._on_generate, proj, parent=self)
+        self._gen_worker.finished_ok.connect(self._on_generation_finished_ok)
+        self._gen_worker.failed.connect(self._on_generation_failed)
+        # Always run cleanup whether success or failure
+        self._gen_worker.finished.connect(self._on_generation_done)
+        self._gen_worker.start()
+        self._gen_dialog.show()
+
+    def _on_generation_finished_ok(self, out_path):
+        self.statusBar().showMessage(f"Drawing saved to {out_path}", 8000)
+
+    def _on_generation_failed(self, exc):
+        self.statusBar().showMessage("Generation failed", 5000)
+        msg = _humanize_error(exc)
+        log_path = PROJECT_ROOT / "jobs" / "last_generation.log"
+        if log_path.is_file():
+            msg += f"\n\nGeneration log: {log_path}"
+        QMessageBox.critical(self, "Generation failed", msg)
+
+    def _on_generation_done(self):
+        """Always-runs cleanup, paired with QThread.finished."""
+        if getattr(self, "_gen_dialog", None) is not None:
+            try:
+                self._gen_dialog.close()
+            except Exception:  # noqa: BLE001
+                pass
+            self._gen_dialog = None
+        self.gen_btn.setEnabled(True)
+        self._gen_act.setEnabled(True)
+        worker = getattr(self, "_gen_worker", None)
+        if worker is not None:
+            try:
+                worker.deleteLater()
+            except Exception:  # noqa: BLE001
+                pass
+        self._gen_worker = None
 
     # ── Tools menu ────────────────────────────────────────────────────────────
 

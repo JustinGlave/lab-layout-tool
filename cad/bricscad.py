@@ -401,15 +401,12 @@ def insert_with_dynamic_layout(
     if log_path is not None:
         try:
             log_path.parent.mkdir(parents=True, exist_ok=True)
-            existing = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
-            header = (
-                f"\n--- room layout (anchor_y={layout.anchor_y:.1f}, "
-                f"local pages used: {max_local_page + 1}) ---\n"
-            )
-            log_path.write_text(
-                existing + header + "\n".join(log_lines) + "\n",
-                encoding="utf-8",
-            )
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(
+                    f"\n--- room layout (anchor_y={layout.anchor_y:.1f}, "
+                    f"local pages used: {max_local_page + 1}) ---\n"
+                    + "\n".join(log_lines) + "\n"
+                )
         except Exception:  # noqa: BLE001
             pass
     return refs, max_local_page
@@ -620,11 +617,8 @@ def draw_mstp_wires(
 
     if log_path is not None and notes:
         try:
-            existing = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
-            log_path.write_text(
-                existing + "\n--- MSTP ---\n" + "\n".join(notes) + "\n",
-                encoding="utf-8",
-            )
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write("\n--- MSTP ---\n" + "\n".join(notes) + "\n")
         except Exception:  # noqa: BLE001
             pass
     return drawn
@@ -672,11 +666,8 @@ def update_room_text(
 
     if log_path is not None and notes:
         try:
-            existing = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
-            log_path.write_text(
-                existing + "\n--- ROOM names ---\n" + "\n".join(notes) + "\n",
-                encoding="utf-8",
-            )
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write("\n--- ROOM names ---\n" + "\n".join(notes) + "\n")
         except Exception:  # noqa: BLE001
             pass
     return replaced
@@ -759,11 +750,8 @@ def update_title_block(
 
     if log_path is not None and notes:
         try:
-            existing = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
-            log_path.write_text(
-                existing + "\n--- title block ---\n" + "\n".join(notes) + "\n",
-                encoding="utf-8",
-            )
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write("\n--- title block ---\n" + "\n".join(notes) + "\n")
         except Exception:  # noqa: BLE001
             pass
     return written
@@ -959,12 +947,12 @@ def replicate_paper_space_layouts(
 
     if log_path is not None:
         try:
-            existing = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
-            log_path.write_text(
-                existing + "\n--- replicate_paper_space_layouts ---\n"
-                + "\n".join(notes) + f"\n  layouts added: {added}\n",
-                encoding="utf-8",
-            )
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(
+                    "\n--- replicate_paper_space_layouts ---\n"
+                    + "\n".join(notes)
+                    + f"\n  layouts added: {added}\n"
+                )
         except Exception:  # noqa: BLE001
             pass
     return added
@@ -1195,12 +1183,11 @@ def extend_template_pages(
         notes.append("  no page-1 entities found — extension skipped")
         if log_path is not None:
             try:
-                existing = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
-                log_path.write_text(
-                    existing + "\n--- extend_template_pages ---\n"
-                    + "\n".join(notes) + "\n",
-                    encoding="utf-8",
-                )
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(
+                        "\n--- extend_template_pages ---\n"
+                        + "\n".join(notes) + "\n"
+                    )
             except Exception:  # noqa: BLE001
                 pass
         return 0
@@ -1260,12 +1247,12 @@ def extend_template_pages(
 
     if log_path is not None:
         try:
-            existing = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
-            log_path.write_text(
-                existing + "\n--- extend_template_pages ---\n"
-                + "\n".join(notes) + f"\n  pages added: {added}\n",
-                encoding="utf-8",
-            )
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(
+                    "\n--- extend_template_pages ---\n"
+                    + "\n".join(notes)
+                    + f"\n  pages added: {added}\n"
+                )
         except Exception:  # noqa: BLE001
             pass
     return added

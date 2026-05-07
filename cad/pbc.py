@@ -305,13 +305,11 @@ def _scrub_pbc_page_top(
 
     if log_path is not None:
         try:
-            existing = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
-            log_path.write_text(
-                existing
-                + f"\n--- PBC page scrub ---\n  removed {deleted} entities "
-                f"(strip y in [{scrub_y_min:.0f}, {y_max:.0f}])\n",
-                encoding="utf-8",
-            )
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(
+                    f"\n--- PBC page scrub ---\n  removed {deleted} entities "
+                    f"(strip y in [{scrub_y_min:.0f}, {y_max:.0f}])\n"
+                )
         except Exception:  # noqa: BLE001
             pass
     return deleted
@@ -547,16 +545,13 @@ def generate_pbc_page(
 
     if log_path is not None:
         try:
-            existing = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
-            header = (
-                f"\n--- PBC pages ({len(paired)} PBC"
-                f"{'s' if len(paired) != 1 else ''} across {n_pages} page"
-                f"{'s' if n_pages != 1 else ''}) ---\n"
-            )
-            log_path.write_text(
-                existing + header + ("\n".join(notes) + "\n" if notes else ""),
-                encoding="utf-8",
-            )
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(
+                    f"\n--- PBC pages ({len(paired)} PBC"
+                    f"{'s' if len(paired) != 1 else ''} across {n_pages} page"
+                    f"{'s' if n_pages != 1 else ''}) ---\n"
+                    + ("\n".join(notes) + "\n" if notes else "")
+                )
         except Exception:  # noqa: BLE001
             pass
     return n_pages

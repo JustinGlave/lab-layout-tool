@@ -924,23 +924,11 @@ class MainWindow(QMainWindow):
             return False
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        # Migrate from old single-room schema if needed
-        if "rooms" not in data:
-            rooms = [{
-                "name": data.get("name", "LAB 001"),
-                "SAV": data.get("SAV", []),
-                "GEX": data.get("GEX", []),
-                "FEV": data.get("FEV", []),
-                "AUX": data.get("AUX", []),
-            }]
-            data = {
-                "job_name": data.get("name", ""),
-                "job_number": "",
-                "technician": "",
-                "date": "",
-                "product_line": data.get("product_line"),
-                "rooms": rooms,
-            }
+        # Upgrade pre-v2 projects (single-room shape) into the current schema.
+        # All version-aware logic lives in cad/migrate.py so the loader stays
+        # version-agnostic.
+        from cad.migrate import migrate_project
+        data = migrate_project(data)
 
         # Fill in missing or broken dwg_path values from variant_id. Lets
         # project JSONs (especially test fixtures) ship without absolute

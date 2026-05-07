@@ -1,0 +1,222 @@
+{
+  "product_lines": [
+    {
+      "id": "celeris_ii",
+      "display_name": "Celeris II",
+      "blocks_dir": "blocks/celeris_ii",
+      "tag_prefixes": {
+        "SAV": "MAV",
+        "GEX": "EXV",
+        "FEV": "EXV",
+        "AUX": "EXV"
+      }
+    },
+    {
+      "id": "cscp",
+      "display_name": "CSCP",
+      "blocks_dir": "blocks/cscp",
+      "tag_prefixes": {
+        "SAV": "PSV",
+        "GEX": "PEV",
+        "FEV": "PEV",
+        "AUX": "PEV"
+      }
+    },
+    {
+      "id": "theris",
+      "display_name": "THERIS",
+      "blocks_dir": "blocks/theris",
+      "tag_prefixes": {
+        "SAV": "HSV",
+        "GEX": "HEV",
+        "FEV": "HEV",
+        "AUX": "HEV"
+      }
+    },
+    {
+      "id": "traccell",
+      "display_name": "TRACCELL",
+      "blocks_dir": "blocks/traccell",
+      "tag_prefixes": {
+        "SAV": "TSV",
+        "GEX": "TEV",
+        "FEV": "TEV",
+        "AUX": "TEV"
+      }
+    }
+  ],
+  "valve_categories": {
+    "SAV": "Supply Air Valves",
+    "GEX": "General Exhaust Valves",
+    "FEV": "Fume Hood Exhaust Valves",
+    "AUX": "All Other Exhausts"
+  },
+  "template_dwg": "templates/Background.dwg",
+  "page": {
+    "_comment": "World-coord bounds of the orange title-block border (page 1). Pages stack vertically with no gap at page_height intervals. page_count is how many borders the template provides; the layout engine fills them top-down (rows_per_page rows per border, serpentine within each page).",
+    "x_min": 66.0,
+    "x_max": 1545.0,
+    "y_min": 33.0,
+    "y_max": 984.0,
+    "width": 1479.0,
+    "height": 951.0,
+    "page_height": 951.0,
+    "page_count": 4,
+    "rows_per_page": 2
+  },
+  "layout": {
+    "_comment": "Coordinates in INCHES. Valves flow left-to-right across the row in SAV\u2192GEX\u2192FEV\u2192AUX order, wrapping to a new row below when the next block would exceed (anchor_x + max_row_width). max_row_width tuned so right edge of last block stays inside page.x_max=1545 (anchor_x=101.69 + 1400 = 1501.69, leaving ~43\" of right-edge clearance).",
+    "anchor_x": 101.6875,
+    "anchor_y": 523.3125,
+    "h_gap": 30.0,
+    "v_gap": 30.0,
+    "max_row_width": 1400.0,
+    "row_order": [
+      "SAV",
+      "GEX",
+      "FEV",
+      "AUX"
+    ]
+  },
+  "align_offsets": {
+    "_comment": "Per-variant Y nudge (inches) applied to bbox-bottom Y when placing. Positive = shift block UP. Use to align visible elements (FUME HOOD vs CAGE WASH, etc.) when the source DWGs have those features at slightly different internal heights. Defaults to 0 for unlisted variants.",
+    "FEV_SINGLE": 0,
+    "FEV_DOUBLE": 0,
+    "CAGE_SINGLE": 0,
+    "CAGE_DOUBLE": 0,
+    "SNORKEL_SINGLE": 0,
+    "SNORKEL_DOUBLE": 0
+  },
+  "mstp": {
+    "_comment": "Per-variant ACM/comm-bus port offsets, computed from world-coord LIST measurements via tools/compute_offsets.py. 'in_offset' missing on _START variants because they begin the comm trunk and have no IN port. wire_width is the polyline width to draw (matches the existing rail at 1 7/8\").",
+    "enabled": true,
+    "wire_width": 1.875,
+    "eol_block": "blocks/misc/eol.dwg",
+    "ports": {
+      "SAV_SINGLE_PBC_ACM_START": {
+        "out_offset": [
+          579.7111,
+          72.2843
+        ]
+      },
+      "SAV_DOUBLE_PBC_ACM_START": {
+        "out_offset": [
+          579.7111,
+          72.2843
+        ]
+      },
+      "SAV_SINGLE_ACM_START": {
+        "out_offset": [
+          428.2315,
+          9.1489
+        ]
+      },
+      "SAV_DOUBLE_ACM_START": {
+        "out_offset": [
+          428.2315,
+          9.1489
+        ]
+      },
+      "SAV_SINGLE_ACM": {
+        "in_offset": [
+          94.5007,
+          13.9623
+        ],
+        "out_offset": [
+          428.2315,
+          9.1489
+        ]
+      },
+      "SAV_DOUBLE_ACM": {
+        "in_offset": [
+          94.5007,
+          13.9623
+        ],
+        "out_offset": [
+          428.2315,
+          9.1489
+        ]
+      },
+      "GEX_SINGLE": {
+        "in_offset": [
+          34.079,
+          1.2051
+        ],
+        "out_offset": [
+          343.2229,
+          0.9247
+        ]
+      },
+      "GEX_DOUBLE": {
+        "in_offset": [
+          23.7391,
+          2.1363
+        ],
+        "out_offset": [
+          332.8829,
+          0.9247
+        ]
+      },
+      "FEV_SINGLE": {
+        "in_offset": [
+          180.1893,
+          0.9247
+        ],
+        "out_offset": [
+          334.4845,
+          111.9748
+        ]
+      },
+      "FEV_DOUBLE": {
+        "in_offset": [
+          182.1027,
+          0.9247
+        ],
+        "out_offset": [
+          336.7708,
+          111.9748
+        ]
+      },
+      "CAGE_SINGLE": {
+        "in_offset": [
+          5.9626,
+          0.9247
+        ],
+        "out_offset": [
+          315.1065,
+          0.9247
+        ]
+      },
+      "CAGE_DOUBLE": {
+        "in_offset": [
+          23.9872,
+          0.9247
+        ],
+        "out_offset": [
+          333.1311,
+          0.9247
+        ]
+      },
+      "SNORKEL_SINGLE": {
+        "in_offset": [
+          5.2655,
+          0.9247
+        ],
+        "out_offset": [
+          314.4094,
+          0.9247
+        ]
+      },
+      "SNORKEL_DOUBLE": {
+        "in_offset": [
+          25.7954,
+          0.9247
+        ],
+        "out_offset": [
+          334.9393,
+          0.9247
+        ]
+      }
+    }
+  }
+}

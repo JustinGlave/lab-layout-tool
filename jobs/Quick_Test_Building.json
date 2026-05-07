@@ -1,0 +1,212 @@
+{
+  "schema_version": 2,
+  "job_name": "Quick Test Building",
+  "job_name_bottom": "3-Lab Smoke Test",
+  "job_number": "QT-2026-001",
+  "title_top": "AS-BUILT",
+  "title_bottom": "VALVE LAYOUT",
+  "office": "ATS Automation Inc.",
+  "revision": "Record Drawing Set",
+  "technician": "JMG",
+  "date": "05/07/2026",
+  "product_line": "cscp",
+  "product_line_display": "CSCP",
+  "created_at": "2026-05-06T10:56:06",
+  "rooms": [
+    {
+      "name": "LAB 101",
+      "SAV": [
+        {
+          "variant_id": "SAV_SINGLE_PBC_ACM_START",
+          "label": "Single PBC ACM Start",
+          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\SAV\\SAV_SINGLE_PBC_ACM_START.dwg",
+          "tag": "PSV-1"
+        }
+      ],
+      "GEX": [
+        {
+          "variant_id": "GEX_SINGLE",
+          "label": "Single",
+          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\GEX\\GEX_SINGLE.dwg",
+          "tag": "PEV-1"
+        }
+      ],
+      "FEV": [
+        {
+          "variant_id": "FEV_SINGLE",
+          "label": "Single",
+          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\FEV\\FEV_SINGLE.dwg",
+          "tag": "PEV-2"
+        }
+      ],
+      "AUX": [
+        {
+          "variant_id": "CAGE_SINGLE",
+          "label": "Cage Single",
+          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\AUX\\CAGE_SINGLE.dwg",
+          "tag": "PEV-3"
+        }
+      ],
+      "pbcs": [
+        {
+          "tag": "PBC-1",
+          "device_name": "PBC Lab 101",
+          "device_number": "1010",
+          "mac": "10",
+          "network_number": "1000",
+          "links": [
+            {
+              "valve_tag": "PSV-1",
+              "com_trunk": 1
+            },
+            {
+              "valve_tag": "PEV-1",
+              "com_trunk": 1
+            },
+            {
+              "valve_tag": "PEV-2",
+              "com_trunk": 1
+            },
+            {
+              "valve_tag": "PEV-3",
+              "com_trunk": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "LAB 102",
+      "SAV": [
+        {
+          "variant_id": "SAV_DOUBLE_PBC_ACM_START",
+          "label": "Double PBC ACM Start",
+          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\SAV\\SAV_DOUBLE_PBC_ACM_START.dwg",
+          "tag": "PSV-1"
+        },
+        {
+          "variant_id": "SAV_SINGLE_ACM",
+          "label": "Single ACM",
+          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\SAV\\SAV_SINGLE_ACM.dwg",
+          "tag": "PSV-2"
+        }
+      ],
+      "GEX": [
+        {
+          "variant_id": "GEX_DOUBLE",
+          "label": "Double",
+          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\GEX\\GEX_DOUBLE.dwg",
+          "tag": "PEV-1"
+        }
+      ],
+      "FEV": [
+        {
+          "variant_id": "FEV_DOUBLE",
+          "label": "Double",
+          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\FEV\\FEV_DOUBLE.dwg",
+          "tag": "PEV-2"
+        }
+      ],
+      "AUX": [
+        {
+          "variant_id": "SNORKEL_SINGLE",
+          "label": "Snorkel Single",
+          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\AUX\\SNORKEL_SINGLE.dwg",
+          "tag": "PEV-3"
+        }
+      ],
+      "pbcs": [
+        {
+          "tag": "PBC-2",
+          "device_name": "PBC lab 102",
+          "device_number": "1020",
+          "mac": "20",
+          "network_number": "1000",
+          "links": [
+            {
+              "valve_tag": "PSV-1",
+              "com_trunk": 1
+            },
+            {
+              "valve_tag": "PSV-2",
+              "com_trunk": 1
+            },
+            {
+              "valve_tag": "PEV-1",
+              "com_trunk": 1
+            },
+            {
+              "valve_tag": "PEV-2",
+              "com_trunk": 1
+            },
+            {
+              "valve_tag": "PEV-3",
+              "com_trunk": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "LAB 103",
+      "SAV": [
+        {
+          "variant_id": "SAV_SINGLE_ACM_START",
+          "label": "Single ACM Start",
+          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\SAV\\SAV_SINGLE_ACM_START.dwg",
+          "tag": "PSV-1"
+        }
+      ],
+      "GEX": [],
+      "FEV": [
+        {
+          "variant_id": "FEV_SINGLE",
+          "label": "Single",
+          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\FEV\\FEV_SINGLE.dwg",
+          "tag": "PEV-1"
+        }
+      ],
+      "AUX": [
+        {
+          "variant_id": "CAGE_DOUBLE",
+          "label": "Cage Double",
+          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\AUX\\CAGE_DOUBLE.dwg",
+          "tag": "PEV-2"
+        },
+        {
+          "variant_id": "SNORKEL_DOUBLE",
+          "label": "Snorkel Double",
+          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\AUX\\SNORKEL_DOUBLE.dwg",
+          "tag": "PEV-3"
+        }
+      ],
+      "pbcs": [
+        {
+          "tag": "PBC-3",
+          "device_name": "PBC lab 103",
+          "device_number": "1030",
+          "mac": "30",
+          "network_number": "1000",
+          "links": [
+            {
+              "valve_tag": "PSV-1",
+              "com_trunk": 1
+            },
+            {
+              "valve_tag": "PEV-1",
+              "com_trunk": 1
+            },
+            {
+              "valve_tag": "PEV-2",
+              "com_trunk": 1
+            },
+            {
+              "valve_tag": "PEV-3",
+              "com_trunk": 1
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

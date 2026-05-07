@@ -242,8 +242,13 @@ class PBCEditor(QWidget):
         self.network_number.setText(data.get("network_number", ""))
         # Refresh first, then apply checked state from the saved links
         self.refresh_valve_list()
+        # Accept int 1/2, str "1"/"2", or "COM1"/"COM2" (case-insensitive)
+        # so loading a project saved by a future schema doesn't crash.
+        def _trunk(raw) -> int:
+            s = str(raw if raw is not None else "").strip().upper()
+            return 2 if s in ("2", "COM2") else 1
         saved = {
-            l.get("valve_tag", ""): int(l.get("com_trunk", 1))
+            l.get("valve_tag", ""): _trunk(l.get("com_trunk", 1))
             for l in data.get("links", [])
         }
         for row in range(self.valves_table.rowCount()):

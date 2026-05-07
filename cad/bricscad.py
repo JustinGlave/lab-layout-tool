@@ -1465,7 +1465,12 @@ def _render_pbc_page(
         com2: list[dict] = []
         for link in pbc.get("links", []) or []:
             tag = (link.get("valve_tag") or "").strip()
-            trunk_n = int(link.get("com_trunk", 1) or 1)
+            # Accept int (1/2), str "1"/"2", or "COM1"/"COM2" (case-insensitive).
+            # Default is COM1. Tolerant parsing so the data model can evolve
+            # without crashing on cached projects.
+            raw_trunk = link.get("com_trunk", 1)
+            _trunk_str = str(raw_trunk if raw_trunk is not None else "").strip().upper()
+            trunk_n = 2 if _trunk_str in ("2", "COM2") else 1
             valve = _find_valve_in_room(room, tag)
             if valve is None:
                 notes.append(

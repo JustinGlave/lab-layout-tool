@@ -890,8 +890,102 @@ class MainWindow(QMainWindow):
         if self._load_project_from_path(JOBS_DIR / "thorough-test.json"):
             self._generate()
 
+    def _validate_project(self, proj: dict) -> tuple[list[str], list[str]]:
+        """Pre-flight checks. Returns (errors, warnings).
+
+        Errors are blockers (no DWG can be produced). Warnings are
+        suspicious but not fatal — the user is asked to confirm.
+        """
+        errors: list[str] = []
+        warnings: list[str] = []
+
+        if not (proj.get("job_name") or "").strip():
+            warnings.append("Job name is empty.")
+        if not proj.get("product_line"):
+            errors.append("No product line selected.")
+
+        rooms = proj.get("rooms") or []
+        if not rooms:
+            errors.append("Project has no rooms.")
+            return errors, warnings
+
+        any_valves = False
+        any_pbcs = False
+        for r_idx, room in enumerate(rooms):
+            label = (room.get("name") or f"Room {r_idx + 1}").strip()
+            valve_count = sum(
+                len(room.get(cat, []) or [])
+                for cat in ("SAV", "GEX", "FEV", "AUX")
+            )
+            pbcs = room.get("pbcs") or []
+            if valve_count > 0:
+                any_valves = True
+            if pbcs:
+                any_pbcs = True
+
+            # Untagged valves
+            for cat in ("SAV", "GEX", "FEV", "AUX"):
+                for v_idx, entry in enumerate(room.get(cat, []) or []):
+                    if not (entry.get("tag") or "").strip():
+                        warnings.append(
+                            f"{label}: {cat} #{v_idx + 1} ({entry.get('variant_id', '?')}) has no tag."
+                        )
+
+            # PBC field completeness
+            valve_tags_in_room: set[str] = set()
+            for cat in ("SAV", "GEX", "FEV", "AUX"):
+                for entry in room.get(cat, []) or []:
+                    t = (entry.get("tag") or "").strip()
+                    if t:
+                        valve_tags_in_room.add(t)
+            for p_idx, pbc in enumerate(pbcs):
+                ptag = (pbc.get("tag") or "").strip() or f"PBC #{p_idx + 1}"
+                if not (pbc.get("tag") or "").strip():
+                    warnings.append(f"{label}: PBC #{p_idx + 1} has no tag.")
+                if not (pbc.get("mac") or "").strip():
+                    warnings.append(f"{label}: {ptag} has no MAC.")
+                # Broken links
+                for link in pbc.get("links") or []:
+                    lt = (link.get("valve_tag") or "").strip()
+                    if lt and lt not in valve_tags_in_room:
+                        warnings.append(
+                            f"{label}: {ptag} links to {lt!r} but no valve "
+                            f"in the room has that tag."
+                        )
+
+        if not any_valves and not any_pbcs:
+            errors.append("Project has no valves and no PBCs in any room.")
+        return errors, warnings
+
     def _generate(self):
         proj = self._collect_project()
+
+        # Pre-flight validation. Errors block; warnings prompt to continue.
+        errors, warnings = self._validate_project(proj)
+        if errors:
+            QMessageBox.critical(
+                self, "Cannot generate",
+                "The project can't be generated:\n\n• " + "\n• ".join(errors),
+            )
+            return
+        if warnings:
+            preview = warnings[:8]
+            tail = (
+                f"\n\n…and {len(warnings) - len(preview)} more."
+                if len(warnings) > len(preview) else ""
+            )
+            resp = QMessageBox.warning(
+                self, "Continue with these issues?",
+                "The project has some unfilled fields:\n\n• "
+                + "\n• ".join(preview)
+                + tail
+                + "\n\nGenerate the drawing anyway?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if resp != QMessageBox.StandardButton.Yes:
+                return
+
         try:
             self.statusBar().showMessage("Generating drawing in BricsCAD…")
             QApplication.processEvents()

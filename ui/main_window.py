@@ -621,7 +621,14 @@ class MainWindow(QMainWindow):
             default = f"LAB {idx + 1:03d}"
             room = RoomEditor(default_name=default)
             room.changed.connect(self._refresh_tree)
-            room.name_changed.connect(lambda r=room: self._update_tab_label(r))
+            # Use a sender-based slot rather than a lambda capturing `room`.
+            # The lambda captured the RoomEditor reference; Qt auto-disconnects
+            # on deleteLater, but in the brief window before deletion any
+            # queued signal could fire the lambda with a half-deleted widget,
+            # risking `RuntimeError: wrapped C/C++ object has been deleted`
+            # on Qt 6. sender() resolves at signal-emit time and is None for
+            # an already-destroyed sender.
+            room.name_changed.connect(self._on_room_name_changed)
             self.room_tabs.addTab(room, default)
             self._apply_current_product_to_room(room)
         # Remove rooms if needed
@@ -650,6 +657,13 @@ class MainWindow(QMainWindow):
             if data.get(cat):
                 return True
         return False
+
+    def _on_room_name_changed(self):
+        """Slot for RoomEditor.name_changed. Resolves sender at emit time so
+        we don't hold a Python reference to a possibly-destroyed widget."""
+        room = self.sender()
+        if isinstance(room, RoomEditor):
+            self._update_tab_label(room)
 
     def _update_tab_label(self, room: RoomEditor):
         idx = self.room_tabs.indexOf(room)

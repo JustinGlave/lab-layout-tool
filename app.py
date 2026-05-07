@@ -32,7 +32,7 @@ def generate(project: dict) -> Path:
     """
     # Lazy-import so the GUI can launch even on machines without pywin32 yet.
     import copy
-    from cad import bricscad
+    from cad import bricscad, pbc
 
     cfg = blocks.load_config()
     layout = layout_from_config(cfg)
@@ -116,7 +116,7 @@ def generate(project: dict) -> Path:
                 log_path=log_path,
             )
 
-        pbc_pages_drawn = bricscad.generate_pbc_page(
+        pbc_pages_drawn = pbc.generate_pbc_page(
             session, project, page_bounds,
             pbc_blocks_dir=pbc_blocks_dir,
             eol_dwg_path=eol_path,

@@ -1085,6 +1085,23 @@ class MainWindow(QMainWindow):
 
     def _on_generation_finished_ok(self, out_path):
         self.statusBar().showMessage(f"Drawing saved to {out_path}", 8000)
+        # Surface the result with an action affordance — the file path is
+        # often needed (to email, attach to a ticket, etc.) and the user
+        # otherwise has to remember/copy it from the status bar.
+        out_path = Path(out_path)
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setWindowTitle("Drawing generated")
+        box.setText(f"Saved to:\n{out_path}")
+        open_btn = box.addButton("Open folder", QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Ok)
+        box.setDefaultButton(QMessageBox.StandardButton.Ok)
+        box.exec()
+        if box.clickedButton() is open_btn:
+            try:
+                os.startfile(str(out_path.parent))  # type: ignore[attr-defined]
+            except Exception:  # noqa: BLE001
+                pass
 
     def _on_generation_failed(self, exc):
         self.statusBar().showMessage("Generation failed", 5000)

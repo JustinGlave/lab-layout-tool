@@ -24,6 +24,40 @@ from .layout import LayoutSpec, Placement
 
 PROG_IDS = ("BricscadApp.AcadApplication", "AutoCAD.Application")
 
+# Default sink for swallowed-exception notes when no caller-supplied notes
+# list is in scope. Most generation entry-points truncate this file at the
+# start of the run, so accumulated swallowed-exception messages from prior
+# runs don't leak in.
+_DEFAULT_LOG = Path(__file__).resolve().parent.parent / "jobs" / "last_generation.log"
+
+
+def _log_swallowed(
+    context: str,
+    exc: BaseException,
+    notes: "list[str] | None" = None,
+) -> None:
+    """Record a swallowed exception so it doesn't disappear silently.
+
+    Many functions in this module use `try/except Exception: pass` for
+    best-effort COM ops (attribute writes that may fail on a locked block,
+    GetBoundingBox on a degenerate entity, etc). When a generation produces
+    wrong output, knowing which of those quiet failures fired is invaluable.
+
+    If a caller-local `notes` list is provided, append there (the function's
+    existing per-section log dump will pick it up). Otherwise write a single
+    line to last_generation.log directly. Failure of the logging itself is
+    silent — there's nowhere safer to put it.
+    """
+    msg = f"  [swallowed] {context}: {type(exc).__name__}: {exc}"
+    if notes is not None:
+        notes.append(msg)
+        return
+    try:
+        with _DEFAULT_LOG.open("a", encoding="utf-8") as f:
+            f.write(msg + "\n")
+    except Exception:  # noqa: BLE001
+        pass
+
 
 class CadError(RuntimeError):
     pass
@@ -801,7 +835,8 @@ def _set_attrs(ref, values: dict[str, str]) -> None:
     """Set ATTRIB values on an inserted block reference, matching by tag (case-insensitive)."""
     try:
         attrs = ref.GetAttributes()
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        _log_swallowed("_set_attrs.GetAttributes", exc)
         return
     if not attrs:
         return
@@ -809,13 +844,14 @@ def _set_attrs(ref, values: dict[str, str]) -> None:
     for a in attrs:
         try:
             tag = str(a.TagString).upper()
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
+            _log_swallowed("_set_attrs.TagString-read", exc)
             continue
         if tag in upper:
             try:
                 a.TextString = upper[tag]
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001
+                _log_swallowed(f"_set_attrs.TextString-write {tag!r}", exc)
 
 
 def replicate_paper_space_layouts(
@@ -1179,6 +1215,13 @@ def extend_template_pages(
 
     x_min, x_max, y_min, y_max = page_bounds
 
+    # Notes list created early so the bbox-snapshot loop below can record
+    # entities it had to skip (vs. earlier behavior of silent skip).
+    notes: list[str] = [
+        f"extend_template_pages: from_page={from_page} to_page={to_page} "
+        f"page_height={page_height:.1f}",
+    ]
+
     # Snapshot page-1 entities BEFORE we start mutating model space.
     page1_entities: list = []
     type_counts: dict[str, int] = {}
@@ -1187,17 +1230,16 @@ def extend_template_pages(
             obj_name = ent.ObjectName
             minp, maxp = ent.GetBoundingBox()
             mid_y = (float(minp[1]) + float(maxp[1])) / 2.0
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
+            _log_swallowed(
+                "extend_template_pages.snapshot-bbox-read", exc, notes=notes,
+            )
             continue
         if y_min <= mid_y <= y_max:
             page1_entities.append(ent)
             type_counts[obj_name] = type_counts.get(obj_name, 0) + 1
 
-    notes: list[str] = [
-        f"extend_template_pages: from_page={from_page} to_page={to_page} "
-        f"page_height={page_height:.1f}",
-        f"  page-1 entities snapshotted: {len(page1_entities)}",
-    ]
+    notes.append(f"  page-1 entities snapshotted: {len(page1_entities)}")
     for k, c in sorted(type_counts.items(), key=lambda kv: -kv[1]):
         notes.append(f"    {k}: {c}")
 
@@ -1235,6 +1277,14 @@ def extend_template_pages(
                 key = f"{obj_name}-copy({type(exc).__name__})"
                 per_type_failures[key] = per_type_failures.get(key, 0) + 1
                 continue
+            # Some BricsCAD plugin layers return None from Copy() for unsupported
+            # entity types instead of raising. Without this guard, copy.Move on
+            # the next line would crash with AttributeError and be silently
+            # swallowed by the per-type-failures bucket.
+            if copy is None:
+                key = f"{obj_name}-copy(None-returned)"
+                per_type_failures[key] = per_type_failures.get(key, 0) + 1
+                continue
             try:
                 copy.Move(_variant_point(0.0, 0.0), _variant_point(0.0, dy))
                 success += 1
@@ -1242,8 +1292,13 @@ def extend_template_pages(
                 key = f"{obj_name}-move({type(exc).__name__})"
                 per_type_failures[key] = per_type_failures.get(key, 0) + 1
 
+        # Surface low-success pages prominently. < 50% means most page-1
+        # entities didn't replicate to this page — extended pages will be
+        # mostly blank and the user needs to know why.
+        ratio = success / max(1, len(page1_entities))
+        warn = " (LOW — replicated <50% of source page)" if ratio < 0.5 else ""
         notes.append(
-            f"  page {p} (dy={dy:.1f}): success={success}/{len(page1_entities)}"
+            f"  page {p} (dy={dy:.1f}): success={success}/{len(page1_entities)}{warn}"
             + (f", failures={per_type_failures}" if per_type_failures else "")
         )
         if success > 0:
@@ -1406,8 +1461,10 @@ def _place_pbc_valve_column(
             dy = new_min_y - minp[1]
             if dx != 0.0 or dy != 0.0:
                 ref.Move(_variant_point(0.0, 0.0), _variant_point(dx, dy))
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            _log_swallowed(
+                "_place_pbc_valve_column.LON4-bbox-snap", exc, notes=notes,
+            )
 
     # Wire from last block bottom down to the terminator top edge.
     add_polyline_with_width(session, [

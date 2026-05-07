@@ -902,7 +902,7 @@ def replicate_paper_space_layouts(
                 pass
 
     notes.append(
-        f"  view-shift completed for {view_shift_count}/{len([source_name] + new_names)} layout(s)"
+        f"  view-shift completed for {view_shift_count}/{n_pages} layout(s)"
     )
 
     if log_path is not None:
@@ -1000,7 +1000,13 @@ def _replicate_layouts_inner(
     # ZOOM CENTER on the page's model-space center, 5) exit MSpace, 6) relock.
     x_min, x_max, y_min, y_max = page_bounds
     cx = (x_min + x_max) / 2.0
-    page_layouts = [source_name] + new_names   # page 0 is source 7.301
+    # Build the full ordered list of layouts to view-shift. Use name_for_page
+    # for ALL pages — that way pre-existing template layouts (e.g. 7.302..7.304
+    # already in Background.dwg before any cloning) get view-shifted too. The
+    # original `[source_name] + new_names` only covered the source plus newly-
+    # cloned layouts, so any project where pages == template's existing layout
+    # count would leave intermediate layouts retaining the page-1 view.
+    page_layouts = [name_for_page(p) for p in range(n_pages)]
 
     view_shift_count = 0
     for p, layout_name in enumerate(page_layouts):

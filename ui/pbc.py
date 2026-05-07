@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -132,6 +133,15 @@ class PBCEditor(QWidget):
         self.valves_table.setColumnWidth(3, 110)   # COM dropdown
         layout.addWidget(self.valves_table)
 
+        # Shown in place of the table when the room has zero valves —
+        # otherwise users see a blank table and don't know what to do.
+        self._no_valves_hint = HintLabel(
+            "This room has no valves yet. Add valves on the room form first, "
+            "then come back here to link them to this PBC."
+        )
+        self._no_valves_hint.setVisible(False)
+        layout.addWidget(self._no_valves_hint)
+
         # Wire all change signals up
         for w in (self.tag_edit, self.device_name, self.device_number,
                   self.mac, self.network_number):
@@ -164,6 +174,11 @@ class PBCEditor(QWidget):
         for cat in ("SAV", "GEX", "FEV", "AUX"):
             for variant, tag in self._room.sections[cat].selections():
                 valves.append((tag.strip(), variant.label, cat))
+
+        # Toggle the empty-state hint vs the table based on what the room has
+        is_empty = len(valves) == 0
+        self.valves_table.setVisible(not is_empty)
+        self._no_valves_hint.setVisible(is_empty)
 
         self.valves_table.setRowCount(len(valves))
         muted_brush = QBrush(QColor("#9ca3af"))
@@ -305,6 +320,9 @@ class PBCWizardDialog(QDialog):
 
         self.editor = PBCEditor(room, default_index=idx)
         self.editor.apply(data)
+        # Snapshot the post-apply state so reject() can detect unsaved edits
+        # via a simple deep equality check (PBC data is plain JSON-ish).
+        self._initial_state = self.editor.collect()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -323,6 +341,52 @@ class PBCWizardDialog(QDialog):
 
     def collect(self) -> dict:
         return self.editor.collect()
+
+    def accept(self):
+        """Soft-validate before saving. Empty tag / MAC / no links are allowed
+        but flagged with a confirm prompt so an accidental Enter on a blank
+        wizard doesn't quietly persist a useless PBC. Pre-flight validation
+        in MainWindow._validate_project still catches these at generation
+        time; this is an earlier, more contextual hint.
+        """
+        data = self.editor.collect()
+        issues: list[str] = []
+        if not data.get("tag"):
+            issues.append("PBC tag is empty")
+        if not data.get("mac"):
+            issues.append("MAC address is empty")
+        if not data.get("links"):
+            issues.append("No valves linked yet")
+        if issues:
+            resp = QMessageBox.question(
+                self, "Save with missing fields?",
+                "This PBC is missing:\n\n• " + "\n• ".join(issues)
+                + "\n\nSave anyway?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if resp != QMessageBox.StandardButton.Yes:
+                return
+        super().accept()
+
+    def reject(self):
+        """Warn before discarding unsaved changes. Detects edits via a simple
+        deep-equality check against the post-apply snapshot (taken in
+        __init__). Clean opens (no edits) close immediately."""
+        try:
+            current = self.editor.collect()
+        except Exception:  # noqa: BLE001
+            current = self._initial_state
+        if current != self._initial_state:
+            resp = QMessageBox.question(
+                self, "Discard changes?",
+                "You've made changes to this PBC. Discard them and close?",
+                QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if resp != QMessageBox.StandardButton.Discard:
+                return
+        super().reject()
 
 
 # ── PBC section (count + list of buttons) ─────────────────────────────────────

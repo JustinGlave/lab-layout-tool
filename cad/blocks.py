@@ -17,6 +17,13 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = PROJECT_ROOT / "config" / "product_lines.json"
 
+# Canonical valve categories, in iteration order (matches the DWG library
+# layout, the form's row_order default, and the JSON schema's per-room keys).
+# Imported across the codebase so adding/removing a category is a one-place
+# edit. Order also matters for flatten_job(), which determines the wire-chain
+# sequence within a room.
+CATEGORIES: tuple[str, ...] = ("SAV", "GEX", "FEV", "AUX")
+
 # Map category key -> on-disk directory name. Only categories whose key would
 # clash with a Windows reserved device name (CON, PRN, AUX, NUL, COM1-9, LPT1-9)
 # need an entry here. Keep the in-memory key short ("AUX") for backwards-compat

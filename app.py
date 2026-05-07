@@ -13,6 +13,7 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication
 
 from cad import blocks
+from cad.blocks import CATEGORIES
 from cad.layout import (
     flatten_job,
     layout_from_config,
@@ -94,7 +95,7 @@ def generate(project: dict) -> Path:
         def _estimate_room_pages(room: dict) -> int:
             valves = sum(
                 len(room.get(cat, []) or [])
-                for cat in ("SAV", "GEX", "FEV", "AUX")
+                for cat in CATEGORIES
             )
             # Empty rooms still reserve a page slot so the per-room → per-page
             # mapping in placement (room_idx → world page) stays consistent.

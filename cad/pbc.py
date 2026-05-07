@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .blocks import CATEGORIES
 from .bricscad import (
     CadSession,
     _bbox,
@@ -110,7 +111,7 @@ def _find_valve_in_room(room: dict, valve_tag: str) -> dict | None:
     valve_tag = (valve_tag or "").strip()
     if not valve_tag:
         return None
-    for cat in ("SAV", "GEX", "FEV", "AUX"):
+    for cat in CATEGORIES:
         for entry in room.get(cat, []) or []:
             if (entry.get("tag", "") or "").strip() == valve_tag:
                 return {"category": cat, **entry}

@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .blocks import CATEGORIES
+
 
 @dataclass
 class Placement:
@@ -56,7 +58,7 @@ class PageSpec:
 def flatten_job(job: dict) -> list[Placement]:
     """Convert a single-room dict (with SAV/GEX/FEV/AUX keys) into Placements."""
     out: list[Placement] = []
-    for cat in ("SAV", "GEX", "FEV", "AUX"):
+    for cat in CATEGORIES:
         for entry in job.get(cat, []):
             out.append(
                 Placement(
@@ -83,7 +85,7 @@ def layout_from_config(cfg: dict) -> LayoutSpec:
         h_gap=float(L["h_gap"]),
         v_gap=float(L["v_gap"]),
         max_row_width=float(L.get("max_row_width", 1500.0)),
-        row_order=list(L.get("row_order", ["SAV", "GEX", "FEV", "AUX"])),
+        row_order=list(L.get("row_order", list(CATEGORIES))),
         page_height=float(P.get("page_height", 951.0)),
         page_count=int(P.get("page_count", 4)),
         rows_per_page=int(P.get("rows_per_page", 2)),

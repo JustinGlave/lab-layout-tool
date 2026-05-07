@@ -43,7 +43,13 @@ import updater
 from updater import UpdateInfo, check_for_update, download_and_apply
 
 from cad import blocks
-from cad.blocks import BlockVariant, ProductLine, list_variants, resolve_block_path
+from cad.blocks import (
+    CATEGORIES,
+    BlockVariant,
+    ProductLine,
+    list_variants,
+    resolve_block_path,
+)
 
 from .components import (
     HintLabel,
@@ -263,7 +269,7 @@ class RoomEditor(QWidget):
 
         # 4 category sections
         self.sections: dict[str, CategorySection] = {}
-        for cat in ("SAV", "GEX", "FEV", "AUX"):
+        for cat in CATEGORIES:
             sec = CategorySection(cat, CATEGORY_LABELS[cat])
             sec.changed.connect(self.changed.emit)
             sec.changed.connect(self._on_valve_changed)
@@ -717,7 +723,7 @@ class MainWindow(QMainWindow):
             return True  # err on the side of confirming
         if data.get("pbcs"):
             return True
-        for cat in ("SAV", "GEX", "FEV", "AUX"):
+        for cat in CATEGORIES:
             if data.get(cat):
                 return True
         return False
@@ -750,7 +756,7 @@ class MainWindow(QMainWindow):
             badge = ""
             try:
                 data = room.collect()
-                v = sum(len(data.get(c, []) or []) for c in ("SAV", "GEX", "FEV", "AUX"))
+                v = sum(len(data.get(c, []) or []) for c in CATEGORIES)
                 p = len(data.get("pbcs", []) or [])
                 if v == 0 and p == 0:
                     badge = " (empty)"
@@ -800,7 +806,7 @@ class MainWindow(QMainWindow):
             r_item = QTreeWidgetItem([r_label])
             r_item.setData(0, Qt.ItemDataRole.UserRole, ("room", r_idx))
             root_item.addChild(r_item)
-            for cat in ("SAV", "GEX", "FEV", "AUX"):
+            for cat in CATEGORIES:
                 sec = room.sections[cat]
                 for i, (variant, tag) in enumerate(sec.selections()):
                     label = tag if tag else f"{cat}-{i + 1} (no tag)"
@@ -900,7 +906,7 @@ class MainWindow(QMainWindow):
         if pl is None:
             return
         for room in data.get("rooms", []) or []:
-            for cat in ("SAV", "GEX", "FEV", "AUX"):
+            for cat in CATEGORIES:
                 for entry in room.get(cat, []) or []:
                     vid = entry.get("variant_id")
                     if not vid:
@@ -1008,7 +1014,7 @@ class MainWindow(QMainWindow):
             label = (room.get("name") or f"Room {r_idx + 1}").strip()
             valve_count = sum(
                 len(room.get(cat, []) or [])
-                for cat in ("SAV", "GEX", "FEV", "AUX")
+                for cat in CATEGORIES
             )
             pbcs = room.get("pbcs") or []
             if valve_count > 0:
@@ -1017,7 +1023,7 @@ class MainWindow(QMainWindow):
                 any_pbcs = True
 
             # Untagged valves
-            for cat in ("SAV", "GEX", "FEV", "AUX"):
+            for cat in CATEGORIES:
                 for v_idx, entry in enumerate(room.get(cat, []) or []):
                     if not (entry.get("tag") or "").strip():
                         warnings.append(
@@ -1026,7 +1032,7 @@ class MainWindow(QMainWindow):
 
             # PBC field completeness
             valve_tags_in_room: set[str] = set()
-            for cat in ("SAV", "GEX", "FEV", "AUX"):
+            for cat in CATEGORIES:
                 for entry in room.get(cat, []) or []:
                     t = (entry.get("tag") or "").strip()
                     if t:

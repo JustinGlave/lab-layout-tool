@@ -28,6 +28,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from cad.blocks import CATEGORIES
+
 from .components import (
     HintLabel,
     NoScrollComboBox,
@@ -171,7 +173,7 @@ class PBCEditor(QWidget):
         self.valves_table.setRowCount(0)
 
         valves: list[tuple[str, str, str]] = []  # (tag, variant_label, category)
-        for cat in ("SAV", "GEX", "FEV", "AUX"):
+        for cat in CATEGORIES:
             for variant, tag in self._room.sections[cat].selections():
                 valves.append((tag.strip(), variant.label, cat))
 

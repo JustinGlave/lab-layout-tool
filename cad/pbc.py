@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .blocks import CATEGORIES
+from .blocks import CATEGORIES, load_config
 from .bricscad import (
     CadSession,
     _bbox,
@@ -40,10 +40,6 @@ from .bricscad import (
 # Per-column ordering, top-to-bottom: Supply → GEX → Fume Hood → AUX
 _PBC_COL_ORDER = ["SAV", "GEX", "FEV", "AUX"]
 
-# Maximum PBCs that lay out cleanly side-by-side on one page (per Justin).
-# Beyond this, the rest wrap onto additional PBC pages.
-_PBC_PER_PAGE = 7
-
 # Category → PBC sub-block filename (relative to blocks/misc/)
 _PBC_SUB_BLOCK = {
     "SAV": "pbc_valve_supply.dwg",
@@ -52,20 +48,38 @@ _PBC_SUB_BLOCK = {
     "AUX": "pbc_valve_aux.dwg",
 }
 
-# PBC body block geometry (matches tools/generate_pbc_blocks.py).
-# AddEllipse(_pt(25, 12), _pt(15, 0), 0.45) → oval centered at y=12 with
-# half-minor-axis = 15 * 0.45 = 6.75, so bottom edge sits at y = 5.25.
-_PBC_BODY_W = 100.0
-_PBC_BODY_H = 140.0
-_PBC_COM1_OVAL_DX = 25.0   # X offset of COM1 oval center from PBC bottom-left
-_PBC_COM2_OVAL_DX = 75.0
-_PBC_COM_OVAL_BOTTOM_DY = 5.25   # Y of COM oval bottom edge (wire entry/exit)
+
+# Geometry constants — sourced from config/product_lines.json:pbc so the
+# runtime drawing code and tools/generate_pbc_blocks.py share a single
+# truth source. Fallbacks match the historical hardcoded values, so a
+# missing/malformed config still produces a runnable build.
+def _load_pbc_geometry() -> dict:
+    try:
+        return load_config().get("pbc", {}) or {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+_PBC_GEOM = _load_pbc_geometry()
+
+# Maximum PBCs that lay out cleanly side-by-side on one page (per Justin).
+# Beyond this, the rest wrap onto additional PBC pages.
+_PBC_PER_PAGE = int(_PBC_GEOM.get("per_page", 7))
+
+# PBC body block geometry. AddEllipse(_pt(25, 12), _pt(15, 0), 0.45) →
+# oval centered at y=12 with half-minor-axis = 15 * 0.45 = 6.75, so bottom
+# edge sits at y = 5.25 (= _PBC_COM_OVAL_BOTTOM_DY).
+_PBC_BODY_W = float(_PBC_GEOM.get("body_w", 100.0))
+_PBC_BODY_H = float(_PBC_GEOM.get("body_h", 140.0))
+_PBC_COM1_OVAL_DX = float(_PBC_GEOM.get("com1_oval_dx", 25.0))
+_PBC_COM2_OVAL_DX = float(_PBC_GEOM.get("com2_oval_dx", 75.0))
+_PBC_COM_OVAL_BOTTOM_DY = float(_PBC_GEOM.get("com_oval_bottom_dy", 5.25))
 
 # Valve sub-block bbox (HOOD has an FHD spur extending the bbox right; bbox-snap
 # uses the bbox bottom-left, so the type-label region is the leftmost 50w).
-_PBC_SUB_W = 50.0
-_PBC_SUB_H = 32.0
-_PBC_SUB_VGAP = 10.0
+_PBC_SUB_W = float(_PBC_GEOM.get("sub_w", 50.0))
+_PBC_SUB_H = float(_PBC_GEOM.get("sub_h", 32.0))
+_PBC_SUB_VGAP = float(_PBC_GEOM.get("sub_vgap", 10.0))
 
 
 def _set_attrs(ref, values: dict[str, str]) -> None:

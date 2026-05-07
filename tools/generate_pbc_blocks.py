@@ -24,6 +24,7 @@ Run:
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -33,6 +34,24 @@ import win32com.client  # type: ignore
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = PROJECT_ROOT / "blocks" / "misc"
 PROG_IDS = ("BricscadApp.AcadApplication", "AutoCAD.Application")
+
+# Load PBC geometry from the shared config so this generator and the runtime
+# drawing code (cad/pbc.py) stay in sync. Fallback values match the historical
+# hardcoded constants, so a missing/malformed config still produces blocks.
+_CFG_PATH = PROJECT_ROOT / "config" / "product_lines.json"
+try:
+    with _CFG_PATH.open("r", encoding="utf-8") as _f:
+        _PBC_GEOM = json.load(_f).get("pbc", {}) or {}
+except Exception:
+    _PBC_GEOM = {}
+
+PBC_BODY_W = float(_PBC_GEOM.get("body_w", 100.0))
+PBC_BODY_H = float(_PBC_GEOM.get("body_h", 140.0))
+PBC_COM1_OVAL_DX = float(_PBC_GEOM.get("com1_oval_dx", 25.0))
+PBC_COM2_OVAL_DX = float(_PBC_GEOM.get("com2_oval_dx", 75.0))
+PBC_COM_OVAL_BOTTOM_DY = float(_PBC_GEOM.get("com_oval_bottom_dy", 5.25))
+PBC_SUB_W = float(_PBC_GEOM.get("sub_w", 50.0))
+PBC_SUB_H = float(_PBC_GEOM.get("sub_h", 32.0))
 
 
 def _pt(x: float, y: float, z: float = 0.0):
@@ -78,8 +97,8 @@ def build_pbc(app, out_path: Path):
     doc = app.Documents.Add()
     ms = doc.ModelSpace
 
-    # Block dimensions: 100" wide, 140" tall
-    W, H = 100.0, 140.0
+    # Block dimensions sourced from config/product_lines.json:pbc
+    W, H = PBC_BODY_W, PBC_BODY_H
 
     # Outer body — split visually into 3 zones (VAC band / PBC body / COM band)
     add_rect(ms, 0, 0, W, H)
@@ -129,8 +148,8 @@ def build_valve_sub(app, out_path: Path, type_label: str, with_fhd: bool):
     doc = app.Documents.Add()
     ms = doc.ModelSpace
 
-    # Sub-block dimensions
-    W, H = 50.0, 32.0
+    # Sub-block dimensions sourced from config/product_lines.json:pbc
+    W, H = PBC_SUB_W, PBC_SUB_H
 
     # Outer rectangle
     add_rect(ms, 0, 0, W, H)

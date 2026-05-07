@@ -38,11 +38,21 @@ def generate(project: dict) -> Path:
     cfg = blocks.load_config()
     layout = layout_from_config(cfg)
     page = cfg.get("page", {})
-    if all(k in page for k in ("x_min", "x_max", "y_min", "y_max")):
-        layout._page_bounds = (
-            float(page["x_min"]), float(page["x_max"]),
-            float(page["y_min"]), float(page["y_max"]),
+    required_page_keys = ("x_min", "x_max", "y_min", "y_max")
+    missing = [k for k in required_page_keys if k not in page]
+    if missing:
+        # Previously fell back to hardcoded (66, 1545, 33, 984) bounds. That
+        # silently produced misaligned drawings if the config was edited
+        # incorrectly — far better to fail loud at the config-load boundary.
+        raise RuntimeError(
+            f"config/product_lines.json:page is missing required keys: "
+            f"{', '.join(missing)}. Expected world-coord bounds of the page-1 "
+            f"title-block border (x_min, x_max, y_min, y_max)."
         )
+    layout._page_bounds = (
+        float(page["x_min"]), float(page["x_max"]),
+        float(page["y_min"]), float(page["y_max"]),
+    )
     layout._align_offsets = {
         k: float(v) for k, v in cfg.get("align_offsets", {}).items()
         if not k.startswith("_")
@@ -82,9 +92,8 @@ def generate(project: dict) -> Path:
         # PBC network pages: generated FIRST so they land on page 1+. PBCs wrap
         # 7-per-page. The returned page count is how far to shift lab rooms down.
         # Returns 0 (no shift) when no room has any PBCs.
-        page_bounds = getattr(layout, "_page_bounds", None) or (
-            66.0, 1545.0, 33.0, 984.0
-        )
+        # _page_bounds is guaranteed-set above (config-load validates required keys).
+        page_bounds = layout._page_bounds
         pbc_blocks_dir = PROJECT_ROOT / "blocks" / "misc"
 
         # Auto-extend the template if the project needs more pages than the

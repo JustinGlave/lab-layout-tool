@@ -28,6 +28,10 @@ class Placement:
     is_reversed: bool = False
     # Index (0-based) of the template page this placement lives on.
     page_idx: int = 0
+    # Row within the page (0-based), set by insert_with_dynamic_layout. Used
+    # by draw_mstp_wires to detect same-row pairs without comparing post-nudge
+    # Y values (align_offsets can shift Y by tens of inches per variant).
+    row_idx: int = 0
 
 
 @dataclass

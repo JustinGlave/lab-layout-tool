@@ -254,6 +254,7 @@ def insert_with_dynamic_layout(
         p.width, p.height = w, h
         p.is_reversed = (direction == -1)
         p.page_idx = page_idx
+        p.row_idx = row_in_page
 
         # Advance cursor for next block
         if direction == +1:
@@ -462,7 +463,11 @@ def draw_mstp_wires(
             drawn += 1
             continue
 
-        same_row = abs(prev.y - cur.y) < 0.5
+        # Compare row identity, not post-nudge Y. align_offsets nudges Y by
+        # variant_id (potentially tens of inches), so two valves of different
+        # categories on the same logical row would fail an abs(prev.y-cur.y)<0.5
+        # check and route their wire through the wrong margin.
+        same_row = (prev.page_idx == cur.page_idx) and (prev.row_idx == cur.row_idx)
 
         # The bbox edge at which the wire exits/enters each block (the side
         # the chain is flowing toward).

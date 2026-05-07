@@ -43,7 +43,7 @@ import updater
 from updater import UpdateInfo, check_for_update, download_and_apply
 
 from cad import blocks
-from cad.blocks import BlockVariant, ProductLine, list_variants
+from cad.blocks import BlockVariant, ProductLine, list_variants, resolve_block_path
 
 from .components import (
     HintLabel,
@@ -789,6 +789,36 @@ class MainWindow(QMainWindow):
             return
         self._load_project_from_path(Path(path))
 
+    def _resolve_block_paths(self, data: dict) -> None:
+        """Fill in missing or stale dwg_path values from variant_id.
+
+        Test fixtures and hand-edited project files may omit dwg_path
+        entirely (or have absolute paths from another machine) — both
+        cases get rebuilt from the project's product_line + each entry's
+        category + variant_id. User-saved projects with valid existing
+        paths pass through unchanged.
+        """
+        pid = data.get("product_line")
+        if not pid:
+            return
+        try:
+            pls = blocks.product_lines()
+        except Exception:  # noqa: BLE001
+            return
+        pl = next((p for p in pls if p.id == pid), None)
+        if pl is None:
+            return
+        for room in data.get("rooms", []) or []:
+            for cat in ("SAV", "GEX", "FEV", "AUX"):
+                for entry in room.get(cat, []) or []:
+                    vid = entry.get("variant_id")
+                    if not vid:
+                        continue
+                    existing = entry.get("dwg_path")
+                    needs_fix = (not existing) or (not Path(existing).is_file())
+                    if needs_fix:
+                        entry["dwg_path"] = str(resolve_block_path(pl, cat, vid))
+
     def _load_project_from_path(self, path: Path) -> bool:
         if not path.exists():
             QMessageBox.warning(
@@ -814,6 +844,12 @@ class MainWindow(QMainWindow):
                 "product_line": data.get("product_line"),
                 "rooms": rooms,
             }
+
+        # Fill in missing or broken dwg_path values from variant_id. Lets
+        # project JSONs (especially test fixtures) ship without absolute
+        # Windows paths embedded; user-saved projects with valid existing
+        # paths pass through unchanged.
+        self._resolve_block_paths(data)
 
         self._suppress_tree_refresh = True
         try:

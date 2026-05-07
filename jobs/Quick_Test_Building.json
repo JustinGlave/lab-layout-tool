@@ -19,7 +19,6 @@
         {
           "variant_id": "SAV_SINGLE_PBC_ACM_START",
           "label": "Single PBC ACM Start",
-          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\SAV\\SAV_SINGLE_PBC_ACM_START.dwg",
           "tag": "PSV-1"
         }
       ],
@@ -27,7 +26,6 @@
         {
           "variant_id": "GEX_SINGLE",
           "label": "Single",
-          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\GEX\\GEX_SINGLE.dwg",
           "tag": "PEV-1"
         }
       ],
@@ -35,7 +33,6 @@
         {
           "variant_id": "FEV_SINGLE",
           "label": "Single",
-          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\FEV\\FEV_SINGLE.dwg",
           "tag": "PEV-2"
         }
       ],
@@ -43,7 +40,6 @@
         {
           "variant_id": "CAGE_SINGLE",
           "label": "Cage Single",
-          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\AUXILIARY\\CAGE_SINGLE.dwg",
           "tag": "PEV-3"
         }
       ],
@@ -81,13 +77,11 @@
         {
           "variant_id": "SAV_DOUBLE_PBC_ACM_START",
           "label": "Double PBC ACM Start",
-          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\SAV\\SAV_DOUBLE_PBC_ACM_START.dwg",
           "tag": "PSV-1"
         },
         {
           "variant_id": "SAV_SINGLE_ACM",
           "label": "Single ACM",
-          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\SAV\\SAV_SINGLE_ACM.dwg",
           "tag": "PSV-2"
         }
       ],
@@ -95,7 +89,6 @@
         {
           "variant_id": "GEX_DOUBLE",
           "label": "Double",
-          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\GEX\\GEX_DOUBLE.dwg",
           "tag": "PEV-1"
         }
       ],
@@ -103,7 +96,6 @@
         {
           "variant_id": "FEV_DOUBLE",
           "label": "Double",
-          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\FEV\\FEV_DOUBLE.dwg",
           "tag": "PEV-2"
         }
       ],
@@ -111,7 +103,6 @@
         {
           "variant_id": "SNORKEL_SINGLE",
           "label": "Snorkel Single",
-          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\AUXILIARY\\SNORKEL_SINGLE.dwg",
           "tag": "PEV-3"
         }
       ],
@@ -153,7 +144,6 @@
         {
           "variant_id": "SAV_SINGLE_ACM_START",
           "label": "Single ACM Start",
-          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\SAV\\SAV_SINGLE_ACM_START.dwg",
           "tag": "PSV-1"
         }
       ],
@@ -162,7 +152,6 @@
         {
           "variant_id": "FEV_SINGLE",
           "label": "Single",
-          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\FEV\\FEV_SINGLE.dwg",
           "tag": "PEV-1"
         }
       ],
@@ -170,13 +159,11 @@
         {
           "variant_id": "CAGE_DOUBLE",
           "label": "Cage Double",
-          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\AUXILIARY\\CAGE_DOUBLE.dwg",
           "tag": "PEV-2"
         },
         {
           "variant_id": "SNORKEL_DOUBLE",
           "label": "Snorkel Double",
-          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\AUXILIARY\\SNORKEL_DOUBLE.dwg",
           "tag": "PEV-3"
         }
       ],

@@ -64,6 +64,19 @@ def product_lines() -> list[ProductLine]:
     ]
 
 
+def resolve_block_path(
+    product_line: ProductLine, category: str, variant_id: str
+) -> Path:
+    """Construct the absolute DWG path for a (product_line, category,
+    variant_id) triple. Lets project files ship without embedding absolute
+    paths — the loader can fill them in at load time."""
+    return (
+        product_line.blocks_dir
+        / _category_dirname(category)
+        / f"{variant_id}.dwg"
+    ).resolve()
+
+
 def list_variants(product_line: ProductLine, category: str) -> list[BlockVariant]:
     """Return DWG variants in <product_line>/<category>/ sorted by size if parseable."""
     cat_dir = product_line.blocks_dir / _category_dirname(category)

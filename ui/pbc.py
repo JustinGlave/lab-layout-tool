@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QBrush, QColor
+from PySide6.QtGui import QBrush, QColor, QGuiApplication
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -291,7 +291,17 @@ class PBCWizardDialog(QDialog):
         title_part = data.get("tag") or f"PBC #{idx + 1}"
         self.setWindowTitle(f"Edit {title_part}")
         self.setModal(True)
-        self.resize(900, 720)
+        # Clamp to 85% of the available screen so the dialog isn't taller
+        # than the desktop on a 1366×768 laptop. Default 900×720 is the
+        # comfortable size on a normal monitor; smaller screens get a
+        # proportional fit.
+        target_w, target_h = 900, 720
+        screen = QGuiApplication.primaryScreen()
+        if screen is not None:
+            geo = screen.availableGeometry()
+            target_w = min(target_w, int(geo.width() * 0.85))
+            target_h = min(target_h, int(geo.height() * 0.85))
+        self.resize(target_w, target_h)
 
         self.editor = PBCEditor(room, default_index=idx)
         self.editor.apply(data)
@@ -392,15 +402,19 @@ class PBCSection(Panel):
             w = item.widget() if item else None
             if w is not None:
                 w.deleteLater()
-        # Add a button per PBC, labelled with tag (or fallback "#N")
+        # Add a button per PBC. Label format keeps to single-spaced tokens
+        # separated by middle-dot, with a leading "(unconfigured)" cue when
+        # the PBC has no tag yet so empty rows are obvious at a glance.
+        # No padding tricks (the original used multi-space hacks to
+        # right-align the link count, which fights the button's QSS padding).
         for i, data in enumerate(self._pbcs):
-            tag = data.get("tag") or ""
+            tag = (data.get("tag") or "").strip()
             n_links = len(data.get("links", []))
-            label = (
-                f"  Edit  PBC #{i + 1}"
-                + (f" — {tag}" if tag else "")
-                + f"     ({n_links} valve link{'s' if n_links != 1 else ''})"
-            )
+            link_part = f"{n_links} link{'s' if n_links != 1 else ''}"
+            if tag:
+                label = f"Edit PBC #{i + 1}  ·  {tag}  ·  {link_part}"
+            else:
+                label = f"Edit PBC #{i + 1}  ·  (unconfigured)  ·  {link_part}"
             btn = SecondaryButton(label)
             btn.setMinimumHeight(40)
             btn.clicked.connect(lambda _checked=False, idx=i: self._open_wizard(idx))

@@ -1326,26 +1326,51 @@ def _place_pbc_valve_column(
     block_tops: list[float] = []
     block_bottoms: list[float] = []
     for v in valves:
-        sub_filename = _PBC_SUB_BLOCK.get(v["category"])
-        if not sub_filename:
-            notes.append(
-                f"  PBC column: skipping valve {v.get('tag', '?')!r} "
-                f"(unknown category {v.get('category')!r})"
-            )
-            continue
-        sub_path = pbc_blocks_dir / sub_filename
-        if not sub_path.is_file():
-            notes.append(
-                f"  PBC column: missing sub-block file {sub_path.name} "
-                f"(skipping {v.get('tag', '?')!r})"
-            )
-            continue
         target_y = cur_top - _PBC_SUB_H
-        ref = insert_block_at_grid_cell(session, sub_path, sub_x_left, target_y)
-        _set_attrs(ref, {
-            "ROOM": room_name,
-            "TAG":  v.get("tag", ""),
-        })
+        sub_filename = _PBC_SUB_BLOCK.get(v["category"])
+        sub_path = pbc_blocks_dir / sub_filename if sub_filename else None
+        # If the sub-block can't be inserted (unknown category, missing
+        # filename, or missing DWG file on disk), drop a visible placeholder
+        # rectangle in its slot so the user sees there's a problem at THIS
+        # position — silent skipping just shifts every later valve up and
+        # makes debugging mysterious. The wire chain still connects through
+        # the placeholder so the column reads as a single chain visually.
+        missing_reason = None
+        if not sub_filename:
+            missing_reason = f"unknown category {v.get('category')!r}"
+        elif sub_path is None or not sub_path.is_file():
+            missing_reason = f"file not found ({sub_path.name if sub_path else '?'})"
+
+        if missing_reason is None:
+            ref = insert_block_at_grid_cell(session, sub_path, sub_x_left, target_y)
+            _set_attrs(ref, {
+                "ROOM": room_name,
+                "TAG":  v.get("tag", ""),
+            })
+        else:
+            # Outline rectangle the same size as a real sub-block, plus a
+            # MISSING label so it's obvious in print preview / on-screen.
+            x0, y0 = sub_x_left, target_y
+            x1, y1 = sub_x_left + _PBC_SUB_W, target_y + _PBC_SUB_H
+            add_polyline_with_width(
+                session,
+                [(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)],
+                0.5,
+            )
+            session.model_space.AddText(
+                f"MISSING {v.get('category', '?')}",
+                _variant_point(x0 + 4.0, y0 + _PBC_SUB_H / 2.0 - 3.0),
+                6.0,
+            )
+            session.model_space.AddText(
+                v.get("tag", "") or "?",
+                _variant_point(x0 + 4.0, y0 + 4.0),
+                4.0,
+            )
+            notes.append(
+                f"  PBC column: placeholder for {v.get('tag', '?')!r} "
+                f"(category {v.get('category', '?')!r}: {missing_reason})"
+            )
         block_tops.append(cur_top)
         block_bottoms.append(target_y)
         cur_top = target_y - _PBC_SUB_VGAP
@@ -1600,6 +1625,13 @@ def _render_pbc_page(
         last_x = max(p[0] for p in trunk_pts)
         first_x = min(first_x, page_cx)
         last_x = max(last_x, page_cx)
+        # Single-PBC pages can collapse to first_x == last_x (zero-length
+        # polyline → filtered out by add_polyline_with_width's epsilon).
+        # Add a small hang on each side so the trunk reads as a trunk
+        # rather than vanishing into the BMS-cloud drop.
+        if last_x - first_x < 1.0:
+            first_x -= 20.0
+            last_x += 20.0
         add_polyline_with_width(
             session, [(first_x, trunk_y), (last_x, trunk_y)], 0.5,
         )

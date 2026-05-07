@@ -91,8 +91,10 @@ def generate(project: dict) -> Path:
             len(room.get(cat, []) or [])
             for cat in ("SAV", "GEX", "FEV", "AUX")
         )
+        # Empty rooms still reserve a page slot so the per-room → per-page
+        # mapping in placement (room_idx → world page) stays consistent.
         if valves == 0:
-            return 0
+            return 1
         return max(1, (valves + 4) // 5)
 
     n_pbcs_total = sum(len(r.get("pbcs", []) or []) for r in rooms)
@@ -164,7 +166,12 @@ def generate(project: dict) -> Path:
     # Replicate the paper-space layout for each additional page so every
     # sheet (PBC pages + lab pages) is printable. update_title_block runs
     # over ALL layouts so attributes fill on each new sheet automatically.
-    total_pages_actual = pbc_pages_drawn + sum(room_page_counts)
+    # Each room reserves at least one page slot (placement uses room_idx
+    # for world page); empty rooms count toward the total even though no
+    # valves are drawn on their page.
+    total_pages_actual = pbc_pages_drawn + sum(
+        max(np, 1) for np in room_page_counts
+    )
     if total_pages_actual > 1:
         bricscad.replicate_paper_space_layouts(
             session, page_bounds, layout.page_height,
@@ -180,8 +187,10 @@ def generate(project: dict) -> Path:
     room_names_expanded: list[str] = []
     for room_idx, n_pages in enumerate(room_page_counts):
         name = rooms[room_idx].get("name", "") or ""
-        # Empty rooms still get one slot (the empty page exists in the template)
-        slots = max(n_pages, 1) if rooms[room_idx] else 0
+        # Each room reserves at least one slot to keep room_idx → world-page
+        # mapping consistent with the placement loop above. Empty rooms still
+        # get their name written to the (otherwise blank) page's ROOM: text.
+        slots = max(n_pages, 1)
         room_names_expanded.extend([name] * slots)
     bricscad.update_room_text(session, room_names_expanded, log_path=log_path)
 

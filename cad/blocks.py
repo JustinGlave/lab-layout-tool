@@ -17,6 +17,18 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = PROJECT_ROOT / "config" / "product_lines.json"
 
+# Map category key -> on-disk directory name. Only categories whose key would
+# clash with a Windows reserved device name (CON, PRN, AUX, NUL, COM1-9, LPT1-9)
+# need an entry here. Keep the in-memory key short ("AUX") for backwards-compat
+# with existing JSON fixtures and code, but store the DWGs under a safe name.
+_CATEGORY_DIRNAME = {
+    "AUX": "AUXILIARY",
+}
+
+
+def _category_dirname(category: str) -> str:
+    return _CATEGORY_DIRNAME.get(category, category)
+
 
 @dataclass(frozen=True)
 class BlockVariant:
@@ -54,7 +66,7 @@ def product_lines() -> list[ProductLine]:
 
 def list_variants(product_line: ProductLine, category: str) -> list[BlockVariant]:
     """Return DWG variants in <product_line>/<category>/ sorted by size if parseable."""
-    cat_dir = product_line.blocks_dir / category
+    cat_dir = product_line.blocks_dir / _category_dirname(category)
     if not cat_dir.is_dir():
         return []
 

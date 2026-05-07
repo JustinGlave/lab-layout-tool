@@ -43,7 +43,7 @@
         {
           "variant_id": "CAGE_SINGLE",
           "label": "Cage Single",
-          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\AUX\\CAGE_SINGLE.dwg",
+          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\AUXILIARY\\CAGE_SINGLE.dwg",
           "tag": "PEV-3"
         }
       ],
@@ -111,7 +111,7 @@
         {
           "variant_id": "SNORKEL_SINGLE",
           "label": "Snorkel Single",
-          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\AUX\\SNORKEL_SINGLE.dwg",
+          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\AUXILIARY\\SNORKEL_SINGLE.dwg",
           "tag": "PEV-3"
         }
       ],
@@ -170,13 +170,13 @@
         {
           "variant_id": "CAGE_DOUBLE",
           "label": "Cage Double",
-          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\AUX\\CAGE_DOUBLE.dwg",
+          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\AUXILIARY\\CAGE_DOUBLE.dwg",
           "tag": "PEV-2"
         },
         {
           "variant_id": "SNORKEL_DOUBLE",
           "label": "Snorkel Double",
-          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\AUX\\SNORKEL_DOUBLE.dwg",
+          "dwg_path": "C:\\Users\\justing\\PycharmProjects\\Phoenix_CAD_Tool\\blocks\\cscp\\AUXILIARY\\SNORKEL_DOUBLE.dwg",
           "tag": "PEV-3"
         }
       ],

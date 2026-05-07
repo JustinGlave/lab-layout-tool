@@ -87,22 +87,22 @@ ANCHORS: dict[str, dict] = {
         "out": (1128.0, 540.25),
     },
     "CAGE_SINGLE": {
-        "path": "blocks/cscp/AUX/CAGE_SINGLE.dwg",
+        "path": "blocks/cscp/AUXILIARY/CAGE_SINGLE.dwg",
         "in":  (636.5625, 469.0625),
         "out": (945.6875, 469.125),
     },
     "CAGE_DOUBLE": {
-        "path": "blocks/cscp/AUX/CAGE_DOUBLE.dwg",
+        "path": "blocks/cscp/AUXILIARY/CAGE_DOUBLE.dwg",
         "in":  (636.5625, 469.0625),
         "out": (945.6875, 469.125),
     },
     "SNORKEL_SINGLE": {
-        "path": "blocks/cscp/AUX/SNORKEL_SINGLE.dwg",
+        "path": "blocks/cscp/AUXILIARY/SNORKEL_SINGLE.dwg",
         "in":  (635.875, 513.75),
         "out": (945.0, 513.75),
     },
     "SNORKEL_DOUBLE": {
-        "path": "blocks/cscp/AUX/SNORKEL_DOUBLE.dwg",
+        "path": "blocks/cscp/AUXILIARY/SNORKEL_DOUBLE.dwg",
         "in":  (639.1875, 512.75),
         "out": (948.3125, 512.8125),
     },

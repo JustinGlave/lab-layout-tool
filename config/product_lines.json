@@ -88,7 +88,7 @@
     "SNORKEL_DOUBLE": 0
   },
   "mstp": {
-    "_comment": "Per-variant ACM/comm-bus port offsets, computed from world-coord LIST measurements via tools/compute_offsets.py. 'in_offset' missing on _START variants because they begin the comm trunk and have no IN port. wire_width is the polyline width to draw (matches the existing rail at 1 7/8\").",
+    "_comment": "Per-variant ACM/comm-bus port offsets, originally hand-measured then refreshed via tools/anchored_refresh.py (run after any straighten_polylines pass that may have nudged rail vertices). 'in_offset' missing on _START variants because they begin the comm trunk and have no IN port. wire_width is the polyline width to draw (matches the existing rail at 1 7/8\").",
     "enabled": true,
     "wire_width": 1.875,
     "eol_block": "blocks/misc/eol.dwg",

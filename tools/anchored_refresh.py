@@ -2,7 +2,8 @@
 state of each DWG, using the user's original measurements as anchors.
 
 For each variant, we know roughly where the user originally measured each rail
-endpoint (the world coords from compute_offsets.py's MEASUREMENTS dict). After
+endpoint (the anchor world coords baked into MEASUREMENTS below — these were
+the live BricsCAD readings the day the offsets were first calibrated). After
 the polyline straightening pass moved some vertex Ys by up to ~0.5", those
 hardcoded coords are slightly off. This script re-opens each DWG, finds the
 polyline vertex CLOSEST to the original anchor, reads that vertex's CURRENT

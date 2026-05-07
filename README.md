@@ -1,6 +1,6 @@
 # Lab Layout Tool
 
-PySide6 desktop tool that drives BricsCAD via COM to generate 2D as-built lab valve drawings — multi-room projects with metadata, per-valve tags, MSTP wiring, EOL terminators, and (in progress) a PBC network page.
+PySide6 desktop tool that drives BricsCAD via COM to generate 2D as-built lab valve drawings — multi-room projects with metadata, per-valve tags, MSTP wiring, EOL terminators, and an optional PBC network page.
 
 Part of the **ATS Inc. tool suite** — same Phoenix Controls dark-navy design system as Project Tracking Tool and Phoenix Checkout Tool.
 
@@ -26,19 +26,20 @@ For a status snapshot of what's built and what's next, see [PLAN.md](PLAN.md).
 3. **Add PBCs (per room)** — count spinner; per PBC, an Edit button opens a wizard with TAG / device name / device number / MAC / network number, plus a linked-valves table to pick which valves in the room belong to COM1 vs COM2 of that PBC.
 4. **Generate** — opens BricsCAD, loads `templates/Background.dwg`, places valve blocks per room (one room per page), draws the MSTP comm chain with EOL terminator, fills the title-block attributes (job name / number / drafter / date), and writes per-room "ROOM: LAB XX" text. Saves to `jobs/drawings/<name>_<timestamp>.dwg`.
 
-A **Tools → Test** menu has Quick Test (3 labs) and Full Test (10 labs covering all CSCP variants) for one-click smoke tests against `jobs/quick-test.json` / `jobs/thorough-test.json`.
+A **Tools → Test** menu has Quick Test (3 labs) and Full Test (10 labs covering all CSCP variants) for one-click smoke tests against `jobs/Quick_Test_Building.json` / `jobs/thorough-test.json`. Both fixtures ship without absolute paths — `dwg_path` is resolved from `variant_id` + product line + category at load time, so the fixtures are portable across machines.
 
 ## Block library
 
 ```
 blocks/
-  cscp/               ← fully populated (10 valve variants)
-    SAV/   SAV_SINGLE.dwg          SAV_DOUBLE.dwg
-           SAV_PBC_ACM_SINGLE.dwg  SAV_PBC_ACM_DOUBLE.dwg
-           SAV_ACM_NON_SINGLE.dwg  SAV_ACM_NON_DOUBLE.dwg
+  cscp/               ← fully populated (14 valve variants)
+    SAV/   SAV_SINGLE_PBC_ACM_START.dwg    SAV_DOUBLE_PBC_ACM_START.dwg
+           SAV_SINGLE_ACM_START.dwg        SAV_DOUBLE_ACM_START.dwg
+           SAV_SINGLE_ACM.dwg              SAV_DOUBLE_ACM.dwg
     GEX/   GEX_SINGLE.dwg   GEX_DOUBLE.dwg
     FEV/   FEV_SINGLE.dwg   FEV_DOUBLE.dwg
-    AUX/   CAGE_SINGLE.dwg  CAGE_DOUBLE.dwg
+    AUXILIARY/  CAGE_SINGLE.dwg  CAGE_DOUBLE.dwg
+                SNORKEL_SINGLE.dwg  SNORKEL_DOUBLE.dwg
   celeris_ii/         ← directories exist, empty (backlog)
   theris/             ← empty (backlog)
   traccell/           ← empty (backlog)
@@ -46,28 +47,30 @@ blocks/
     eol.dwg                MSTP end-of-line terminator
     pbc.dwg                PBC body (TAG/DEVICE_NUM/MAC attrs)
     pbc_valve_{gex,hood,aux,supply}.dwg   PBC valve sub-blocks
-    pbc_network.dwg        BMS NETWORK cloud + branches (in progress)
+    pbc_network.dwg        BMS NETWORK reference geometry
     title_sheet.dwg        ...
+  _reference/         ← out-of-band reference DWGs (not loaded at runtime)
 ```
 
 **Naming convention:**
 - SAV/GEX/FEV/AUX dropdowns auto-discover whatever DWGs are in their directory.
-- SAV/GEX/FEV: `{TYPE}_{CONFIG}.dwg` — `CONFIG` is `SINGLE` / `DOUBLE` / `DUAL` (case-insensitive). SAV has 6 variants because the user picks PBC ACM Start / ACM Start / ACM non-start; PBC+ACM is start-only, non-start is always ACM-only.
+- SAV/GEX/FEV: `{TYPE}_{CONFIG}[_extra].dwg` — `CONFIG` is `SINGLE` / `DOUBLE` (case-insensitive). SAV has 6 variants because the user picks PBC ACM Start / ACM Start / ACM (non-start); PBC+ACM is start-only, the third variant is always ACM-only.
 - AUX: free-form snake_case → Title Cased in dropdown (`gas_cabinet.dwg` → "Gas Cabinet").
+- **AUX directory note:** the on-disk folder is `AUXILIARY/`, not `AUX/` — `AUX` is a Windows reserved device name (PowerShell can't access it; git needs `core.protectNTFS=false`). The category KEY is still `"AUX"` everywhere in code and JSON; `cad/blocks._CATEGORY_DIRNAME` maps it to `AUXILIARY` when constructing paths.
 
 After dropping a new DWG in, hit `View → Refresh Block Library` (F5). To wire a new variant into the MSTP chain, register its port offsets in `config/product_lines.json` under `mstp.ports` (see "Port offsets" below).
 
 ## Page layout (multi-room)
 
-`templates/Background.dwg` already contains 4 stacked title-block borders. The generator places **one room per border** (top border = first room). Bounds are world coords in `config/product_lines.json:page` (`x_min/x_max/y_min/y_max` and `page_height` between borders).
+`templates/Background.dwg` ships with 4 stacked title-block borders. Projects needing more pages (PBC + N rooms, multi-page rooms, etc.) auto-extend the template at generation time via `cad/bricscad.py:extend_template_pages` — page-1 entities are duplicated downward by `page_height`. The generator places **one room per page slot** (top page = first room). Bounds are world coords in `config/product_lines.json:page` (`x_min/x_max/y_min/y_max` and `page_height` between borders).
 
 For each room:
-- Anchor at `(101.6875, anchor_y - room_idx * page_height)`. Place blocks left-to-right with `h_gap = 30"`.
-- If a row exceeds `max_row_width = 1400"`, wrap to the next row (`v_gap = 30"`). Within a row, use straight horizontal MSTP wires; row-to-row wires serpentine through the right margin (odd rows L→R, even rows R→L).
+- Anchor at `(101.6875, anchor_y - room_first_page * page_height)` where `room_first_page = room_idx + pbc_pages_drawn + cumulative_extra`. Empty rooms still reserve a page slot so room→page mapping stays consistent.
+- Place blocks left-to-right with `h_gap = 30"`. If a row exceeds `max_row_width = 1400"`, wrap to the next row (`v_gap = 30"`). Within a row, use straight horizontal MSTP wires; row-to-row wires serpentine through the right margin (odd rows L→R, even rows R→L).
 - Insert EOL block at the chain end (centered on the bus Y).
 - Render a free-text tag label above each block.
 
-**Projects with > 4 rooms or any project that uses the PBC network page** need an extended template — see "Template extension" in PLAN.md.
+After all rooms are placed, `replicate_paper_space_layouts` clones the source paper-space layout (typically `7.301`) for every additional page and view-shifts each cloned viewport to its corresponding model-space page. Cloned viewports inherit `DisplayLocked = True` and silently reject view changes via every API; the unlock → ZOOM → relock sequence is essential.
 
 ## Per-block port offsets
 
@@ -109,18 +112,18 @@ To inspect any DWG's blocks/attributes/layouts:
 
 Per-room labels: any model-space text starting with `ROOM:` is found, sorted by Y descending, and the top N matches are replaced with `ROOM: <room name>` — one per room, in order. (`update_room_text`.)
 
-## PBC network builder (Phase 8 — in progress)
+## PBC network builder (Phase 8 — complete)
 
 Status:
 - ✅ DWG block files generated by `tools\generate_pbc_blocks.py` (5 blocks).
 - ✅ Data model: `Room.pbcs[]` with `tag / device_name / device_number / mac / network_number / links[]`.
 - ✅ Form UI: `ui/pbc.py` — count spinner per room + Edit button → `PBCWizardDialog` with all fields + linked-valves table (Link checkbox + COM1/COM2 dropdown per linked valve).
-- ⏳ **Drawing generation (`cad/bricscad.py:generate_pbc_page`)** — first page with BMS NETWORK cloud, NET branches, side-by-side PBC blocks, valve columns under each PBC sorted GEX → HOOD → AUX → SUPPLY top-to-bottom, MSTP wires, LON4 terminators. Skip if no PBCs in any room. **This is tomorrow's task.**
-- ⏳ Template extension for projects with > 3 labs (PBC takes page 1, so a 10-lab thorough test needs 11 pages).
+- ✅ Drawing generation (`cad/bricscad.py:generate_pbc_page`) — first pages with BMS NETWORK ellipse, NET branches, side-by-side PBC blocks (7-per-page wrap), valve columns under each PBC sorted SUPPLY → GEX → HOOD → AUX top-to-bottom, MSTP wires, LON4 terminators. Skipped automatically when no room has any PBCs.
+- ✅ Auto-extension of model-space borders for projects with >3 labs (`extend_template_pages`).
 
 Constraints (from Justin):
 - 1 PBC per lab is typical; future "1 PBC across 4 labs" is out of scope.
-- AUX placed AFTER hoods in the column ordering.
+- Column order top-to-bottom: **SUPPLY → GEX → HOOD → AUX**.
 - COM1 vs COM2 is user-assigned per linked valve, not auto-split.
 - Hardware limits (visual only, not enforced): 20 valves, 10 hoods, 30 total per PBC.
 
@@ -161,13 +164,17 @@ cad/blocks.py                block library discovery
 cad/layout.py                Placement + LayoutSpec + flatten_job (pure math)
 cad/bricscad.py              COM driver — insert, wire, EOL, tag labels, title-block, room text
 tools/                       generate_pbc_blocks, anchored_refresh, straighten_polylines,
-                             measure_ports, compute_offsets, inspect_template, ...
+                             generate_psh500a, inspect_template
 blocks/<line>/<CAT>/*.dwg    block library (cscp populated; others empty)
+                             AUX maps to AUXILIARY/ on disk (Win32 reserved name)
 blocks/misc/*.dwg            EOL, PBC, PBC-valve sub-blocks, ...
-templates/Background.dwg     4-border template (extend for projects with > 4 rooms)
-jobs/*.json                  saved job configs (incl. quick-test.json, thorough-test.json)
-jobs/drawings/*.dwg          generated as-builts
-jobs/last_generation.log     log from the most recent generate() run
+blocks/_reference/*.dwg      out-of-band reference DWGs (not loaded at runtime)
+templates/Background.dwg     4-border template; auto-extended for >3-room projects
+jobs/*.json                  saved project configs (Quick_Test_Building.json,
+                             thorough-test.json — both portable, no absolute paths)
+jobs/drawings/*.dwg          generated as-builts (gitignored)
+jobs/last_generation.log     log from the most recent generate() run (gitignored)
+docs/AUDIT_PLAN_*.docx       periodic audit + phased fix plans
 ```
 
 ## Build a release
@@ -215,5 +222,5 @@ Uninstall asks whether to keep saved jobs and generated drawings under
 To build just the installer (after PyInstaller has run):
 
 ```cmd
-"C:\Users\justing\AppData\Local\Programs\Inno Setup 6\ISCC.exe" /DMyAppVersion=0.1.0 installer.iss
+"%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" /DMyAppVersion=0.1.0 installer.iss
 ```

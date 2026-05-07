@@ -4,11 +4,11 @@ Reference doc for the staged buildout. Each phase is a checkpoint: don't start t
 
 ## Quick state (as of 2026-05-07)
 
-- Phases 0–5: ✅ done
-- Phase 6 (Multi-room project model): ✅ done
-- Phase 7 (Title-block auto-fill + ROOM text): ✅ done
-- **Phase 8 (PBC Network Builder): ⚙️ IN PROGRESS — see "Stable checkpoint" + "Next" below**
-- Phases 9+: backlog
+- Phases 0–8: ✅ done
+- **Audit Phase A (correctness fixes): ✅ shipped 2026-05-07** — see audit doc + git log A1–A9
+- **Audit Phase B (project hygiene): ⚙️ IN PROGRESS** — docs reset, dead-code cleanup, fixture portability, repo hygiene
+- Phase 9+ (other product lines, Excel export, …): backlog
+- See `docs/AUDIT_PLAN_2026-05-07.docx` for the full audit-driven phase plan.
 
 ## ⭐ Stable checkpoint (2026-05-07 — Phase 8 COMPLETE)
 
@@ -66,10 +66,10 @@ CSCP blocks all in place (10 valve variants — see `blocks/cscp/`). Other produ
 - Tag labels rendered as text above each block (`add_tag_labels`)
 
 **Tools written in this phase:**
-- `tools/measure_ports.py` — find horizontal bus polylines per layer
-- `tools/compute_offsets.py` — manual-measurement → offset converter
-- `tools/anchored_refresh.py` — re-resolve port offsets against current DWGs (handles drift after polyline straightening)
+- `tools/anchored_refresh.py` — re-resolve port offsets against current DWGs using each variant's anchor coords as input (handles drift after polyline straightening)
 - `tools/straighten_polylines.py` — snap near-axis polyline segments to exact horizontal/vertical (with `.dwg.bak` backups)
+
+(Earlier iterations `measure_ports.py`, `compute_offsets.py`, `refresh_offsets.py` were superseded by `anchored_refresh.py` and removed during Phase B cleanup; recover from git history if a future product line needs onboarding-style measurement.)
 
 ## Phase 4 — UX Polish (partial)
 
@@ -123,18 +123,22 @@ Generation: each room placed on its own page (`anchor_y - room_idx * page_height
 - Per-room "ROOM: LAB XX" text in model space is found (text starting with `ROOM:`), sorted by Y descending, and replaced with `ROOM: <room name>` for each project room.
 - Implemented in `cad/bricscad.py`: `update_title_block`, `update_room_text`.
 
-## Phase 8 — PBC Network Builder ⚙️ IN PROGRESS
+## Phase 8 — PBC Network Builder ✅
 
-See "Tomorrow's first task" at the top.
+Complete — see "Stable checkpoint" at the top of this file for the full breakdown of what shipped (BMS network ellipse + branches, side-by-side PBC bodies wrapping 7-per-page, COM1/COM2 valve columns SUPPLY → GEX → HOOD → AUX, LON4 terminators, multi-page rooms, auto-extension of model-space borders, auto-replication of paper-space layouts, per-sheet viewport view-shift, title-block + ROOM-text auto-fill across all sheets).
 
-**Done:**
-- Step 1: 5 block files via `tools/generate_pbc_blocks.py`
-- Step 2: data model — `Room.pbcs[]` with PBC fields + valve links
-- Step 3: form — `ui/pbc.py` with count spinner + `PBCWizardDialog`
+The ⭐ DisplayLocked breakthrough at the top of this file is the canonical reference for why per-sheet view-shifts had been failing previously.
 
-**Not done:**
-- Step 4: `cad/bricscad.py:generate_pbc_page` (BMS cloud + branches + PBC blocks + valve columns + wires + LON4 terminators)
-- Step 4 prerequisite: extend template for N+1 borders when project has > 3 labs
+**Audit-driven follow-ups (Phase A, shipped 2026-05-07) — see `docs/AUDIT_PLAN_2026-05-07.docx`:**
+- A1: page accounting consistent across estimate / actual / ROOM-text slots when a room is empty
+- A2: `connect()` doesn't silently swap to AutoCAD when BricsCAD has no doc open
+- A3: `replicate_paper_space_layouts` wrapped in try/finally so a mid-burst exception still restores user-visible state
+- A4: same-row wire detection compares `(page_idx, row_idx)` instead of post-nudge Y
+- A5: view-shift covers pre-existing template layouts, not just freshly-cloned ones
+- A6: `PBCSection.refresh_all` actually does the documented sync chain
+- A7: confirm before spinbox-driven room removal that would discard data
+- A8: lambda-captured RoomEditor reference replaced with `sender()`-based slot
+- A9: `com_trunk` accepts int 1/2 or string "1"/"2"/"COM1"/"COM2"
 
 **Constraints (from Justin):**
 - 1 PBC per lab usual; future: 1 PBC across 4 labs (out of scope now)

@@ -339,6 +339,11 @@ class PBCSection(Panel):
         super().__init__(title="PBCs", parent=parent)
         self._room = room
         self._pbcs: list[dict] = []
+        # Tracked while a PBCWizardDialog is open so refresh_all() can forward
+        # valve-list changes into the live wizard. Today the dialog is modal
+        # so this is mostly future-proofing, but it also lets refresh_all()
+        # reliably rebuild button labels even mid-edit.
+        self._active_dialog: "PBCWizardDialog | None" = None
 
         body: QVBoxLayout = self.layout()
 
@@ -407,16 +412,35 @@ class PBCSection(Panel):
         dialog = PBCWizardDialog(
             self._pbcs[idx], self._room, idx, parent=self.window()
         )
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self._pbcs[idx] = dialog.collect()
-            self._rebuild_buttons()
-            self.changed.emit()
+        self._active_dialog = dialog
+        try:
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                self._pbcs[idx] = dialog.collect()
+                self._rebuild_buttons()
+                self.changed.emit()
+        finally:
+            self._active_dialog = None
 
     # ── Sync hooks ──────────────────────────────────────────────────────────
 
     def refresh_all(self):
-        """No-op — the wizard pulls a fresh valve list each time it opens."""
-        return
+        """Re-render PBC state in response to a room valve change.
+
+        Wired into the chain documented in CLAUDE.md:
+            CategorySection.changed -> RoomEditor._on_valve_changed
+            -> PBCSection.refresh_all -> PBCEditor.refresh_valve_list
+
+        With modal dialogs the active-dialog forwarding is mostly defensive
+        — the user can't edit the room behind a modal — but it makes the
+        chain meaningful if dialogs ever become non-modal, and rebuilding
+        the button row catches any state-derived label drift.
+        """
+        if self._active_dialog is not None:
+            try:
+                self._active_dialog.editor.refresh_valve_list()
+            except Exception:  # noqa: BLE001
+                pass
+        self._rebuild_buttons()
 
     # ── IO ─────────────────────────────────────────────────────────────────
 

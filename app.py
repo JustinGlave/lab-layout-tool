@@ -66,140 +66,148 @@ def generate(project: dict) -> Path:
     log_path = PROJECT_ROOT / "jobs" / "last_generation.log"
     log_path.write_text("", encoding="utf-8")  # truncate from previous run
 
-    # Place each room on its own page. Each room runs the existing layout
-    # logic but with anchor_y offset down by (room_idx * page_height) and
-    # page_count clamped to 1 (so rooms can't spill into the next page).
-    mstp_cfg = cfg.get("mstp", {})
-    eol_rel = mstp_cfg.get("eol_block")
-    eol_path = (PROJECT_ROOT / eol_rel) if eol_rel else None
+    # Wrap the COM-mutating phase in try/except so any mid-burst exception
+    # still restores BricsCAD's user-visible state via cleanup_after_failure
+    # before re-raising. Without this, a crash could leave BricsCAD invisible,
+    # FILEDIA suppressed, or stuck inside a model-space viewport.
+    try:
+        # Place each room on its own page. Each room runs the existing layout
+        # logic but with anchor_y offset down by (room_idx * page_height) and
+        # page_count clamped to 1 (so rooms can't spill into the next page).
+        mstp_cfg = cfg.get("mstp", {})
+        eol_rel = mstp_cfg.get("eol_block")
+        eol_path = (PROJECT_ROOT / eol_rel) if eol_rel else None
 
-    # PBC network pages: generated FIRST so they land on page 1+. PBCs wrap
-    # 7-per-page. The returned page count is how far to shift lab rooms down.
-    # Returns 0 (no shift) when no room has any PBCs.
-    page_bounds = getattr(layout, "_page_bounds", None) or (
-        66.0, 1545.0, 33.0, 984.0
-    )
-    pbc_blocks_dir = PROJECT_ROOT / "blocks" / "misc"
-
-    # Auto-extend the template if the project needs more pages than the
-    # template provides. Runs BEFORE PBC generation (whose scrub mutates
-    # page-1 content) so the page-1 snapshot copied to extra pages is intact.
-    # Estimate per-room page count generously (~5 valves per page) so dense
-    # rooms that span multiple pages still land on borders.
-    def _estimate_room_pages(room: dict) -> int:
-        valves = sum(
-            len(room.get(cat, []) or [])
-            for cat in ("SAV", "GEX", "FEV", "AUX")
+        # PBC network pages: generated FIRST so they land on page 1+. PBCs wrap
+        # 7-per-page. The returned page count is how far to shift lab rooms down.
+        # Returns 0 (no shift) when no room has any PBCs.
+        page_bounds = getattr(layout, "_page_bounds", None) or (
+            66.0, 1545.0, 33.0, 984.0
         )
-        # Empty rooms still reserve a page slot so the per-room → per-page
-        # mapping in placement (room_idx → world page) stays consistent.
-        if valves == 0:
-            return 1
-        return max(1, (valves + 4) // 5)
+        pbc_blocks_dir = PROJECT_ROOT / "blocks" / "misc"
 
-    n_pbcs_total = sum(len(r.get("pbcs", []) or []) for r in rooms)
-    n_pbc_pages_needed = (n_pbcs_total + 6) // 7 if n_pbcs_total else 0
-    estimated_room_pages = sum(_estimate_room_pages(r) for r in rooms)
-    # +2 buffer so a room overshooting its estimate still lands on a border
-    total_pages_needed = n_pbc_pages_needed + estimated_room_pages + 2
-    template_pages = int(layout.page_count)
-    if total_pages_needed > template_pages:
-        bricscad.extend_template_pages(
-            session, page_bounds, layout.page_height,
-            from_page=template_pages,
-            to_page=total_pages_needed,
+        # Auto-extend the template if the project needs more pages than the
+        # template provides. Runs BEFORE PBC generation (whose scrub mutates
+        # page-1 content) so the page-1 snapshot copied to extra pages is intact.
+        # Estimate per-room page count generously (~5 valves per page) so dense
+        # rooms that span multiple pages still land on borders.
+        def _estimate_room_pages(room: dict) -> int:
+            valves = sum(
+                len(room.get(cat, []) or [])
+                for cat in ("SAV", "GEX", "FEV", "AUX")
+            )
+            # Empty rooms still reserve a page slot so the per-room → per-page
+            # mapping in placement (room_idx → world page) stays consistent.
+            if valves == 0:
+                return 1
+            return max(1, (valves + 4) // 5)
+
+        n_pbcs_total = sum(len(r.get("pbcs", []) or []) for r in rooms)
+        n_pbc_pages_needed = (n_pbcs_total + 6) // 7 if n_pbcs_total else 0
+        estimated_room_pages = sum(_estimate_room_pages(r) for r in rooms)
+        # +2 buffer so a room overshooting its estimate still lands on a border
+        total_pages_needed = n_pbc_pages_needed + estimated_room_pages + 2
+        template_pages = int(layout.page_count)
+        if total_pages_needed > template_pages:
+            bricscad.extend_template_pages(
+                session, page_bounds, layout.page_height,
+                from_page=template_pages,
+                to_page=total_pages_needed,
+                log_path=log_path,
+            )
+
+        pbc_pages_drawn = bricscad.generate_pbc_page(
+            session, project, page_bounds,
+            pbc_blocks_dir=pbc_blocks_dir,
+            eol_dwg_path=eol_path,
+            page_height=layout.page_height,
             log_path=log_path,
         )
 
-    pbc_pages_drawn = bricscad.generate_pbc_page(
-        session, project, page_bounds,
-        pbc_blocks_dir=pbc_blocks_dir,
-        eol_dwg_path=eol_path,
-        page_height=layout.page_height,
-        log_path=log_path,
-    )
+        # Lab rendering — each room may span multiple pages. cumulative_extra
+        # tracks how many EXTRA pages prior rooms used (beyond their first page),
+        # so subsequent rooms shift down accordingly and don't overlap.
+        cumulative_extra = 0
+        room_page_counts: list[int] = []   # 1+ for non-empty rooms, 0 for empty
+        for room_idx, room_placements in enumerate(rooms_placements):
+            if not room_placements:
+                room_page_counts.append(0)
+                continue
+            # World page index of this room's FIRST page
+            room_first_page = room_idx + pbc_pages_drawn + cumulative_extra
+            room_layout = copy.copy(layout)
+            room_layout.anchor_y = layout.anchor_y - room_first_page * layout.page_height
+            room_layout.page_count = 10   # generous — let the room span as needed
 
-    # Lab rendering — each room may span multiple pages. cumulative_extra
-    # tracks how many EXTRA pages prior rooms used (beyond their first page),
-    # so subsequent rooms shift down accordingly and don't overlap.
-    cumulative_extra = 0
-    room_page_counts: list[int] = []   # 1+ for non-empty rooms, 0 for empty
-    for room_idx, room_placements in enumerate(rooms_placements):
-        if not room_placements:
-            room_page_counts.append(0)
-            continue
-        # World page index of this room's FIRST page
-        room_first_page = room_idx + pbc_pages_drawn + cumulative_extra
-        room_layout = copy.copy(layout)
-        room_layout.anchor_y = layout.anchor_y - room_first_page * layout.page_height
-        room_layout.page_count = 10   # generous — let the room span as needed
-
-        _, max_local_page = bricscad.insert_with_dynamic_layout(
-            session, room_placements, room_layout, log_path=log_path,
-        )
-        room_pages = max_local_page + 1
-        room_page_counts.append(room_pages)
-
-        # Convert each placement's local page_idx (0..max_local_page) to its
-        # WORLD page index so wire routing/cross-page logic uses the right
-        # page bounds.
-        for p in room_placements:
-            p.page_idx = room_first_page + p.page_idx
-
-        # Wire the room's chain
-        if len(room_placements) >= 2:
-            bricscad.draw_mstp_wires(
-                session, room_placements, mstp_cfg,
-                layout=layout, log_path=log_path,
+            _, max_local_page = bricscad.insert_with_dynamic_layout(
+                session, room_placements, room_layout, log_path=log_path,
             )
-        # EOL at the end of this room's chain
-        if eol_path is not None:
-            bricscad.insert_eol_marker(
-                session, room_placements, mstp_cfg, eol_path, log_path=log_path,
-            )
-        # Tag labels above each block
-        bricscad.add_tag_labels(session, room_placements)
+            room_pages = max_local_page + 1
+            room_page_counts.append(room_pages)
 
-        # Subsequent rooms shift down by the EXTRA pages this room used.
-        cumulative_extra += max_local_page
+            # Convert each placement's local page_idx (0..max_local_page) to its
+            # WORLD page index so wire routing/cross-page logic uses the right
+            # page bounds.
+            for p in room_placements:
+                p.page_idx = room_first_page + p.page_idx
 
-    # Replicate the paper-space layout for each additional page so every
-    # sheet (PBC pages + lab pages) is printable. update_title_block runs
-    # over ALL layouts so attributes fill on each new sheet automatically.
-    # Each room reserves at least one page slot (placement uses room_idx
-    # for world page); empty rooms count toward the total even though no
-    # valves are drawn on their page.
-    total_pages_actual = pbc_pages_drawn + sum(
-        max(np, 1) for np in room_page_counts
-    )
-    if total_pages_actual > 1:
-        bricscad.replicate_paper_space_layouts(
-            session, page_bounds, layout.page_height,
-            n_pages=total_pages_actual,
-            log_path=log_path,
+            # Wire the room's chain
+            if len(room_placements) >= 2:
+                bricscad.draw_mstp_wires(
+                    session, room_placements, mstp_cfg,
+                    layout=layout, log_path=log_path,
+                )
+            # EOL at the end of this room's chain
+            if eol_path is not None:
+                bricscad.insert_eol_marker(
+                    session, room_placements, mstp_cfg, eol_path, log_path=log_path,
+                )
+            # Tag labels above each block
+            bricscad.add_tag_labels(session, room_placements)
+
+            # Subsequent rooms shift down by the EXTRA pages this room used.
+            cumulative_extra += max_local_page
+
+        # Replicate the paper-space layout for each additional page so every
+        # sheet (PBC pages + lab pages) is printable. update_title_block runs
+        # over ALL layouts so attributes fill on each new sheet automatically.
+        # Each room reserves at least one page slot (placement uses room_idx
+        # for world page); empty rooms count toward the total even though no
+        # valves are drawn on their page.
+        total_pages_actual = pbc_pages_drawn + sum(
+            max(np, 1) for np in room_page_counts
         )
+        if total_pages_actual > 1:
+            bricscad.replicate_paper_space_layouts(
+                session, page_bounds, layout.page_height,
+                n_pages=total_pages_actual,
+                log_path=log_path,
+            )
 
-    # Project-level title block attributes (paper space) and per-page ROOM text.
-    # Multi-page rooms occupy multiple ROOM: text slots; expand room_names so
-    # each occupied page gets the same room name (LAB 101 spans 2 pages →
-    # both pages read "ROOM: LAB 101").
-    bricscad.update_title_block(session, project, log_path=log_path)
-    room_names_expanded: list[str] = []
-    for room_idx, n_pages in enumerate(room_page_counts):
-        name = rooms[room_idx].get("name", "") or ""
-        # Each room reserves at least one slot to keep room_idx → world-page
-        # mapping consistent with the placement loop above. Empty rooms still
-        # get their name written to the (otherwise blank) page's ROOM: text.
-        slots = max(n_pages, 1)
-        room_names_expanded.extend([name] * slots)
-    bricscad.update_room_text(session, room_names_expanded, log_path=log_path)
+        # Project-level title block attributes (paper space) and per-page ROOM text.
+        # Multi-page rooms occupy multiple ROOM: text slots; expand room_names so
+        # each occupied page gets the same room name (LAB 101 spans 2 pages →
+        # both pages read "ROOM: LAB 101").
+        bricscad.update_title_block(session, project, log_path=log_path)
+        room_names_expanded: list[str] = []
+        for room_idx, n_pages in enumerate(room_page_counts):
+            name = rooms[room_idx].get("name", "") or ""
+            # Each room reserves at least one slot to keep room_idx → world-page
+            # mapping consistent with the placement loop above. Empty rooms still
+            # get their name written to the (otherwise blank) page's ROOM: text.
+            slots = max(n_pages, 1)
+            room_names_expanded.extend([name] * slots)
+        bricscad.update_room_text(session, room_names_expanded, log_path=log_path)
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    name = (project.get("job_name") or "untitled").replace(" ", "_")
-    out_path = OUTPUT_DIR / f"{name}_{stamp}.dwg"
-    bricscad.save_as(session, out_path)
-    return out_path
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        name = (project.get("job_name") or "untitled").replace(" ", "_")
+        out_path = OUTPUT_DIR / f"{name}_{stamp}.dwg"
+        bricscad.save_as(session, out_path)
+        return out_path
+    except Exception as exc:
+        bricscad.cleanup_after_failure(session, log_path=log_path, error=exc)
+        raise
 
 
 def main() -> int:

@@ -95,6 +95,74 @@ def new_drawing(session: CadSession, template_dwg: Path | None) -> CadSession:
     return CadSession(app=session.app, doc=doc, model_space=doc.ModelSpace)
 
 
+def cleanup_after_failure(
+    session: "CadSession | None",
+    log_path: "Path | None" = None,
+    error: "Exception | None" = None,
+) -> None:
+    """Best-effort restore of BricsCAD process state after a generation
+    exception. Each step is independent: failures here are swallowed so
+    the original error in generate() can still propagate cleanly.
+
+    Specifically restores:
+      - app.Visible = True (so the user can see what state the doc is in)
+      - FILEDIA = 1 (so file dialogs work again)
+      - exits any active model-space viewport back to paper space
+
+    Does NOT save or close the partial drawing — the user may want to
+    inspect what was placed before the failure. Appends a note to the
+    generation log so post-mortem debugging knows where things went.
+    """
+    notes: list[str] = []
+    if error is not None:
+        notes.append(f"FAILURE: {type(error).__name__}: {error}")
+    if session is None:
+        notes.append("  no session to clean up")
+    else:
+        app = None
+        doc = None
+        try:
+            app = session.app
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            doc = session.doc
+        except Exception:  # noqa: BLE001
+            pass
+
+        # Restore app visibility — most important: a mid-burst crash that
+        # bypassed replicate_paper_space_layouts' own finally would leave
+        # BricsCAD invisible and the user thinks it died.
+        try:
+            if app is not None:
+                app.Visible = True
+                notes.append("  visibility restored")
+        except Exception as exc:  # noqa: BLE001
+            notes.append(f"  visibility restore failed: {exc}")
+
+        # Restore FILEDIA so file dialogs work again
+        try:
+            if doc is not None:
+                doc.SetVariable("FILEDIA", 1)
+                notes.append("  FILEDIA = 1")
+        except Exception as exc:  # noqa: BLE001
+            notes.append(f"  FILEDIA restore failed: {exc}")
+
+        # Exit MSpace if we ended inside a viewport
+        try:
+            if doc is not None:
+                doc.MSpace = False
+        except Exception:  # noqa: BLE001
+            pass
+
+    if log_path is not None and notes:
+        try:
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write("\n--- cleanup_after_failure ---\n" + "\n".join(notes) + "\n")
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def insert_block(
     session: CadSession,
     dwg_path: Path,

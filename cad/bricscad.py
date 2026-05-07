@@ -826,21 +826,113 @@ def replicate_paper_space_layouts(
         pass
 
     # Speed knobs — hide app + suppress dialogs during the SendCommand burst.
+    # Captured here, then EVERYTHING below runs inside a try/finally so any
+    # exception still restores the user-visible state (visible app, FILEDIA
+    # on, viewports re-locked, model space exited, original layout active).
+    # Without this, a mid-burst crash leaves BricsCAD invisible / dialogs
+    # suppressed / viewports pannable, and the user thinks the app is broken.
     app = None
-    orig_visible = None
-    orig_filedia = None
-    try:
-        app = doc.Application
-        orig_visible = app.Visible
-        app.Visible = False
-    except Exception:  # noqa: BLE001
-        pass
-    try:
-        orig_filedia = doc.GetVariable("FILEDIA")
-        doc.SetVariable("FILEDIA", 0)
-    except Exception:  # noqa: BLE001
-        pass
+    orig_visible: object = None
+    orig_filedia: object = None
+    prev_active = None
+    unlocked_viewports: list = []  # populated below; relocked in finally
+    added = 0
+    view_shift_count = 0
+    new_names: list[str] = []
 
+    try:
+        try:
+            app = doc.Application
+            orig_visible = app.Visible
+            app.Visible = False
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            orig_filedia = doc.GetVariable("FILEDIA")
+            doc.SetVariable("FILEDIA", 0)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            prev_active = doc.ActiveLayout
+        except Exception:  # noqa: BLE001
+            pass
+
+        added, view_shift_count, new_names = _replicate_layouts_inner(
+            doc, source_name, source_layout, page_bounds, page_height,
+            n_pages, name_for_page, existing_names, notes, unlocked_viewports,
+        )
+
+    finally:
+        # Relock every viewport we unlocked. Cloned viewports start
+        # DisplayLocked=True; we toggle them off to ZOOM, then back on so
+        # the user can't accidentally pan a viewport off its assigned page.
+        for ent in unlocked_viewports:
+            try:
+                ent.DisplayLocked = True
+            except Exception:  # noqa: BLE001
+                pass
+        # Exit model space if we ended inside a viewport
+        try:
+            doc.MSpace = False
+        except Exception:  # noqa: BLE001
+            pass
+        # Restore the previously-active layout
+        if prev_active is not None:
+            try:
+                doc.ActiveLayout = prev_active
+            except Exception:  # noqa: BLE001
+                pass
+        # Restore FILEDIA so the user sees file dialogs again
+        if orig_filedia is not None:
+            try:
+                doc.SetVariable("FILEDIA", orig_filedia)
+            except Exception:  # noqa: BLE001
+                pass
+        # Restore app visibility — most important: without this, a crash
+        # mid-burst leaves BricsCAD invisible and the user thinks it died.
+        if app is not None and orig_visible is not None:
+            try:
+                app.Visible = bool(orig_visible)
+            except Exception:  # noqa: BLE001
+                pass
+
+    notes.append(
+        f"  view-shift completed for {view_shift_count}/{len([source_name] + new_names)} layout(s)"
+    )
+
+    if log_path is not None:
+        try:
+            existing = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
+            log_path.write_text(
+                existing + "\n--- replicate_paper_space_layouts ---\n"
+                + "\n".join(notes) + f"\n  layouts added: {added}\n",
+                encoding="utf-8",
+            )
+        except Exception:  # noqa: BLE001
+            pass
+    return added
+
+
+def _replicate_layouts_inner(
+    doc,
+    source_name: str,
+    source_layout,
+    page_bounds: tuple[float, float, float, float],
+    page_height: float,
+    n_pages: int,
+    name_for_page,
+    existing_names: set[str],
+    notes: list[str],
+    unlocked_viewports: list,
+) -> tuple[int, int, list[str]]:
+    """Inner body of replicate_paper_space_layouts — mutating section.
+
+    Split out so the caller can wrap state mutations in try/finally without
+    nesting the whole logic. Appends per-step messages to `notes` and tracks
+    unlocked viewports in `unlocked_viewports` (caller relocks them all).
+
+    Returns (layouts_added, view_shift_count, new_names_list).
+    """
     # Use BricsCAD's built-in `LAYOUT _C source new` command via SendCommand.
     # This is the only path that produces a properly-initialised paper-space
     # clone (entities + working viewport) — direct COM `Layouts.Add +
@@ -905,12 +997,6 @@ def replicate_paper_space_layouts(
     cx = (x_min + x_max) / 2.0
     page_layouts = [source_name] + new_names   # page 0 is source 7.301
 
-    prev_active = None
-    try:
-        prev_active = doc.ActiveLayout
-    except Exception:  # noqa: BLE001
-        pass
-
     view_shift_count = 0
     for p, layout_name in enumerate(page_layouts):
         cy = (y_min + y_max) / 2.0 - p * page_height
@@ -920,17 +1006,18 @@ def replicate_paper_space_layouts(
             notes.append(f"  view-shift {layout_name}: not found ({exc})")
             continue
 
-        # Step 1: snapshot + unlock all viewports in this layout
-        viewport_ents: list = []
+        # Step 1: snapshot + unlock all viewports in this layout. Track
+        # unlocked viewports in `unlocked_viewports` so the caller's finally
+        # block relocks them even if a later step raises.
         for ent in layout.Block:
             try:
                 if str(ent.ObjectName) != "AcDbViewport":
                     continue
             except Exception:  # noqa: BLE001
                 continue
-            viewport_ents.append(ent)
             try:
                 ent.DisplayLocked = False
+                unlocked_viewports.append(ent)
             except Exception:  # noqa: BLE001
                 pass
 
@@ -973,52 +1060,18 @@ def replicate_paper_space_layouts(
                 f"(CVPORT=1) after MSpace=True — skipping ZOOM"
             )
 
-        # Step 6: back to paper space
+        # Step 6: back to paper space (per-iteration; caller's finally also
+        # unsets MSpace if we exit the loop with it still True).
         try:
             doc.MSpace = False
         except Exception:  # noqa: BLE001
             pass
 
-        # Step 7: relock viewports so user can't accidentally pan them
-        for ent in viewport_ents:
-            try:
-                ent.DisplayLocked = True
-            except Exception:  # noqa: BLE001
-                pass
+        # Note: viewports stay unlocked here. The caller's finally block
+        # relocks all viewports in `unlocked_viewports` once we return,
+        # so a mid-loop exception still results in locked viewports.
 
-    if prev_active is not None:
-        try:
-            doc.ActiveLayout = prev_active
-        except Exception:  # noqa: BLE001
-            pass
-
-    notes.append(
-        f"  view-shift completed for {view_shift_count}/{len(page_layouts)} layout(s)"
-    )
-
-    # Restore speed knobs
-    if orig_filedia is not None:
-        try:
-            doc.SetVariable("FILEDIA", orig_filedia)
-        except Exception:  # noqa: BLE001
-            pass
-    if app is not None and orig_visible is not None:
-        try:
-            app.Visible = bool(orig_visible)
-        except Exception:  # noqa: BLE001
-            pass
-
-    if log_path is not None:
-        try:
-            existing = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
-            log_path.write_text(
-                existing + "\n--- replicate_paper_space_layouts ---\n"
-                + "\n".join(notes) + f"\n  layouts added: {added}\n",
-                encoding="utf-8",
-            )
-        except Exception:  # noqa: BLE001
-            pass
-    return added
+    return added, view_shift_count, new_names
 
 
 def extend_template_pages(

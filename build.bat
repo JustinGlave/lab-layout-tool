@@ -23,12 +23,21 @@ echo  Building Lab Layout Tool v%VERSION%
 echo ============================================================
 echo.
 
-rem Step 0: sanity checks
+rem Step 0: sanity checks + sync embedded QSS from source
 echo [0/4] Running sanity checks...
 .venv\Scripts\python -m py_compile version.py app.py ui\style.py ui\components.py ui\main_window.py cad\blocks.py cad\layout.py cad\bricscad.py
 if errorlevel 1 (
     echo.
     echo ERROR: Python compile check failed.
+    exit /b 1
+)
+rem Sync ui/style.py:_EMBEDDED_QSS from phoenix_style.qss so a frozen .exe
+rem with no _internal/phoenix_style.qss falls back to the current styling.
+rem Exit code 0 = already in sync, 1 = rewrote, 2 = error.
+.venv\Scripts\python tools\embed_qss.py
+if errorlevel 2 (
+    echo.
+    echo ERROR: tools\embed_qss.py failed; see message above.
     exit /b 1
 )
 echo [0/4] Sanity checks passed.

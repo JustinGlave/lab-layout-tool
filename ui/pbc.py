@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QPushButton,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -131,7 +132,7 @@ class PBCEditor(QWidget):
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
         self.valves_table.setColumnWidth(0, 110)   # Tag
         self.valves_table.setColumnWidth(2, 60)    # Link checkbox
-        self.valves_table.setColumnWidth(3, 110)   # COM dropdown
+        self.valves_table.setColumnWidth(3, 150)   # COM toggle (two buttons)
         layout.addWidget(self.valves_table)
 
         # Shown in place of the table when the room has zero valves —
@@ -208,14 +209,10 @@ class PBCEditor(QWidget):
             cb.toggled.connect(self.changed.emit)
             self.valves_table.setCellWidget(i, 2, cb_container)
 
-            combo = NoScrollComboBox()
-            combo.addItems(["COM1", "COM2"])
-            combo.setEnabled(has_tag)
-            combo.setMinimumWidth(96)   # ensure the dropdown text + arrow fit
-            if has_tag and tag in existing:
-                combo.setCurrentIndex(0 if existing[tag] == 1 else 1)
-            combo.currentIndexChanged.connect(self.changed.emit)
-            self.valves_table.setCellWidget(i, 3, combo)
+            initial_com = existing.get(tag, 1) if has_tag else 1
+            toggle = _make_com_toggle(initial_com, on_changed=self.changed.emit)
+            toggle.com_set_enabled(has_tag)
+            self.valves_table.setCellWidget(i, 3, toggle)
 
     # ── Link snapshot / collect / apply ───────────────────────────────────────
 
@@ -228,13 +225,14 @@ class PBCEditor(QWidget):
                 continue
             tag = tag_item.text().strip()
             cb_container = self.valves_table.cellWidget(row, 2)
-            combo = self.valves_table.cellWidget(row, 3)
-            if cb_container is None or combo is None:
+            toggle = self.valves_table.cellWidget(row, 3)
+            if cb_container is None or toggle is None:
                 continue
             cb = cb_container.findChild(QCheckBox)
             if cb is None or not cb.isChecked():
                 continue
-            out[tag] = 1 if combo.currentIndex() == 0 else 2
+            getter = getattr(toggle, "com_get", None)
+            out[tag] = getter() if callable(getter) else 1
         return out
 
     def collect(self) -> dict:
@@ -275,13 +273,74 @@ class PBCEditor(QWidget):
             if tag not in saved:
                 continue
             cb_container = self.valves_table.cellWidget(row, 2)
-            combo = self.valves_table.cellWidget(row, 3)
-            if cb_container is None or combo is None:
+            toggle = self.valves_table.cellWidget(row, 3)
+            if cb_container is None or toggle is None:
                 continue
             cb = cb_container.findChild(QCheckBox)
             if cb is not None:
                 cb.setChecked(True)
-            combo.setCurrentIndex(0 if saved[tag] == 1 else 1)
+            setter = getattr(toggle, "com_set", None)
+            if callable(setter):
+                setter(saved[tag])
+
+
+def _make_com_toggle(initial: int, on_changed) -> QWidget:
+    """Two-button COM1/COM2 toggle for use as a table cell widget.
+
+    Replaces the original NoScrollComboBox dropdown — a binary choice with
+    a hidden chevron looked like a read-only text field. Two checkable
+    buttons (one always selected) are unambiguous and one click instead
+    of two (open + select).
+
+    The container exposes `com_get()`, `com_set(int)`, `com_set_enabled(bool)`
+    methods so the host can read/write/disable without knowing about the
+    inner buttons.
+    """
+    container = QWidget()
+    lay = QHBoxLayout(container)
+    lay.setContentsMargins(0, 0, 0, 0)
+    lay.setSpacing(2)
+
+    com1 = QPushButton("COM1")
+    com1.setObjectName("comToggleBtn")
+    com1.setCheckable(True)
+    com1.setChecked(initial == 1)
+    com1.setMinimumHeight(28)
+    com1.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    com2 = QPushButton("COM2")
+    com2.setObjectName("comToggleBtn")
+    com2.setCheckable(True)
+    com2.setChecked(initial != 1)
+    com2.setMinimumHeight(28)
+    com2.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def select_com1():
+        com1.setChecked(True)
+        com2.setChecked(False)
+        on_changed()
+
+    def select_com2():
+        com1.setChecked(False)
+        com2.setChecked(True)
+        on_changed()
+
+    com1.clicked.connect(select_com1)
+    com2.clicked.connect(select_com2)
+
+    lay.addWidget(com1)
+    lay.addWidget(com2)
+
+    container.com_get = lambda: 1 if com1.isChecked() else 2
+    def _set(v: int):
+        com1.setChecked(v == 1)
+        com2.setChecked(v != 1)
+    container.com_set = _set
+    def _set_enabled(b: bool):
+        com1.setEnabled(b)
+        com2.setEnabled(b)
+    container.com_set_enabled = _set_enabled
+    return container
 
 
 def _centered_checkbox(checked: bool = False) -> tuple[QWidget, QCheckBox]:

@@ -260,6 +260,39 @@ QComboBox QAbstractItemView {
     outline: none;
 }
 
+/* PBC linked-valves COM toggle: a 2-button widget replacing what used to be
+   a binary-choice combo. The active button takes the brand-blue accent so
+   the selected COM trunk is unambiguous at a glance. */
+
+QPushButton#comToggleBtn {
+    background-color: #1f2937;
+    color: #cbd5e1;
+    border: 1px solid #2d3748;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 9pt;
+    font-weight: 500;
+    min-height: 22px;
+}
+
+QPushButton#comToggleBtn:hover {
+    background-color: #2d3748;
+    color: #ffffff;
+}
+
+QPushButton#comToggleBtn:checked {
+    background-color: #3b82f6;
+    color: #ffffff;
+    border-color: #3b82f6;
+    font-weight: 600;
+}
+
+QPushButton#comToggleBtn:disabled {
+    background-color: #050810;
+    color: #4b5563;
+    border-color: #1a1f2e;
+}
+
 /* ============================================================================
    DATE EDIT
    ============================================================================ */

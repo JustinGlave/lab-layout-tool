@@ -50,6 +50,16 @@ from cad.blocks import (
     list_variants,
     resolve_block_path,
 )
+from paths import (
+    APP_NAME,
+    BLOCKS_DIR,
+    FIXTURES_DIR,
+    JOBS_DIR,
+    LAST_GEN_LOG,
+    ORG_NAME,
+    PROJECT_ROOT,
+    TEMPLATES_DIR,
+)
 
 from .components import (
     BackgroundWatermarkWidget,
@@ -72,12 +82,6 @@ from .components import (
 )
 from .pbc import PBCSection
 from .style import _resource_path
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-JOBS_DIR = PROJECT_ROOT / "jobs"
-
-APP_NAME = "Lab Layout Tool"
-ORG_NAME = "ATS Inc"
 
 CATEGORY_LABELS = {
     "SAV": "Supply Air Valves",
@@ -1100,11 +1104,11 @@ class MainWindow(QMainWindow):
         return True
 
     def _run_test_quick(self):
-        if self._load_project_from_path(JOBS_DIR / "Quick_Test_Building.json"):
+        if self._load_project_from_path(FIXTURES_DIR / "Quick_Test_Building.json"):
             self._generate()
 
     def _run_test_full(self):
-        if self._load_project_from_path(JOBS_DIR / "thorough-test.json"):
+        if self._load_project_from_path(FIXTURES_DIR / "thorough-test.json"):
             self._generate()
 
     def _validate_project(self, proj: dict) -> tuple[list[str], list[str]]:
@@ -1261,7 +1265,7 @@ class MainWindow(QMainWindow):
     def _on_generation_failed(self, exc):
         self.statusBar().showMessage("Generation failed", 5000)
         msg = _humanize_error(exc)
-        log_path = PROJECT_ROOT / "jobs" / "last_generation.log"
+        log_path = LAST_GEN_LOG
         if log_path.is_file():
             msg += f"\n\nGeneration log: {log_path}"
         QMessageBox.critical(self, "Generation failed", msg)
@@ -1287,10 +1291,10 @@ class MainWindow(QMainWindow):
     # ── Tools menu ────────────────────────────────────────────────────────────
 
     def _open_blocks_folder(self):
-        os.startfile(str(PROJECT_ROOT / "blocks"))  # type: ignore[attr-defined]
+        os.startfile(str(BLOCKS_DIR))  # type: ignore[attr-defined]
 
     def _open_templates_folder(self):
-        os.startfile(str(PROJECT_ROOT / "templates"))  # type: ignore[attr-defined]
+        os.startfile(str(TEMPLATES_DIR))  # type: ignore[attr-defined]
 
     def _on_about(self):
         QMessageBox.about(

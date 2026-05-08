@@ -18,12 +18,10 @@ from cad.layout import (
     flatten_job,
     layout_from_config,
 )
+from paths import LAST_GEN_LOG, OUTPUT_DIR, PROJECT_ROOT
 from ui.style import apply_dark_theme
 from ui.main_window import MainWindow, APP_NAME, ORG_NAME
 from version import __version__
-
-PROJECT_ROOT = Path(__file__).resolve().parent
-OUTPUT_DIR = PROJECT_ROOT / "jobs" / "drawings"
 
 
 def generate(project: dict) -> Path:
@@ -74,7 +72,8 @@ def generate(project: dict) -> Path:
 
     session = bricscad.connect(visible=True)
     session = bricscad.new_drawing(session, template_path)
-    log_path = PROJECT_ROOT / "jobs" / "last_generation.log"
+    log_path = LAST_GEN_LOG
+    log_path.parent.mkdir(parents=True, exist_ok=True)
     log_path.write_text("", encoding="utf-8")  # truncate from previous run
 
     # Wrap the COM-mutating phase in try/except so any mid-burst exception

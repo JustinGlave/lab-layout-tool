@@ -19,16 +19,19 @@ from pathlib import Path
 import pythoncom  # type: ignore
 import win32com.client  # type: ignore
 
+from paths import LAST_GEN_LOG
+
 from .layout import LayoutSpec, Placement
 
 
 PROG_IDS = ("BricscadApp.AcadApplication", "AutoCAD.Application")
 
-# Default sink for swallowed-exception notes when no caller-supplied notes
-# list is in scope. Most generation entry-points truncate this file at the
-# start of the run, so accumulated swallowed-exception messages from prior
-# runs don't leak in.
-_DEFAULT_LOG = Path(__file__).resolve().parent.parent / "jobs" / "last_generation.log"
+# Default sink for swallowed-exception notes (`paths.LAST_GEN_LOG`) is used
+# when no caller-supplied notes list is in scope. Most generation entry-points
+# truncate that file at the start of the run, so accumulated swallowed-
+# exception messages from prior runs don't leak in. Resolved through paths
+# module so frozen builds write to %APPDATA% instead of the auto-updater-
+# wiped install dir.
 
 
 def _log_swallowed(
@@ -53,7 +56,8 @@ def _log_swallowed(
         notes.append(msg)
         return
     try:
-        with _DEFAULT_LOG.open("a", encoding="utf-8") as f:
+        LAST_GEN_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with LAST_GEN_LOG.open("a", encoding="utf-8") as f:
             f.write(msg + "\n")
     except Exception:  # noqa: BLE001
         pass

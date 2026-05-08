@@ -276,8 +276,11 @@ def download_and_apply(info: UpdateInfo, progress_callback=None) -> None:
     current_exe = Path(sys.executable).resolve()
     install_dir = current_exe.parent
 
-    # Download zip to system temp
+    # Download zip to system temp. Close the fd from mkstemp immediately and
+    # re-open via Path so an exception between mkstemp and the urlopen can't
+    # leak the descriptor.
     tmp_fd, tmp_zip_str = tempfile.mkstemp(suffix=".zip")
+    os.close(tmp_fd)
     tmp_zip = Path(tmp_zip_str)
 
     try:
@@ -289,7 +292,7 @@ def download_and_apply(info: UpdateInfo, progress_callback=None) -> None:
             total = int(resp.headers.get("Content-Length", 0))
             done = 0
             chunk = 64 * 1024
-            with open(tmp_fd, "wb") as fh:
+            with tmp_zip.open("wb") as fh:
                 while True:
                     block = resp.read(chunk)
                     if not block:
@@ -307,6 +310,12 @@ def download_and_apply(info: UpdateInfo, progress_callback=None) -> None:
             )
 
     except RuntimeError:
+        # tmp_zip already cleaned up by the raising branch above (or we're
+        # propagating a RuntimeError that originated elsewhere — best-effort).
+        try:
+            tmp_zip.unlink(missing_ok=True)
+        except OSError:
+            logger.exception("Failed to remove temp zip on RuntimeError: %s", tmp_zip)
         raise
     except (OSError, urllib.error.URLError, ValueError) as exc:
         try:
@@ -325,16 +334,19 @@ def download_and_apply(info: UpdateInfo, progress_callback=None) -> None:
         raise
 
     # Write scripts that wait for this process to exit, extract the full app
-    # folder over the install dir, then relaunch.
+    # folder over the install dir, then relaunch. Close fds from mkstemp
+    # immediately so a write failure can't leak the descriptor.
     pid = os.getpid()
     ps_fd, ps_path_str = tempfile.mkstemp(suffix=".ps1")
+    os.close(ps_fd)
     bat_fd, bat_path_str = tempfile.mkstemp(suffix=".bat")
+    os.close(bat_fd)
     ps_path = Path(ps_path_str)
     bat_path = Path(bat_path_str)
 
-    with open(ps_fd, "w", encoding="utf-8") as fh:
+    with ps_path.open("w", encoding="utf-8") as fh:
         fh.write(_build_update_powershell_script(tmp_zip, install_dir, current_exe))
-    with open(bat_fd, "w", encoding="utf-8") as fh:
+    with bat_path.open("w", encoding="utf-8") as fh:
         fh.write(_build_update_batch(pid, ps_path, current_exe))
 
     subprocess.Popen(

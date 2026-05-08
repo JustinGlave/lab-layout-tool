@@ -491,12 +491,24 @@ def draw_mstp_wires(
     ports: dict = mstp_cfg.get("ports", {})
     width = float(mstp_cfg.get("wire_width", 0.0))
 
-    # Small overlap that pulls each wire endpoint a few inches INTO its block,
-    # so the new wire visually merges with the existing rail polyline even if
-    # the rail's vertex coords drift by a fraction of an inch (post-straighten
-    # snap residue, etc). 2" is enough to mask typical sub-inch drift without
-    # bleeding visibly into other interior block content.
-    SAFETY_OVERLAP = 2.0
+    # Geometry constants loaded from config. Defaults match the original
+    # hardcoded values used through v0.1.0 so generation is unchanged for
+    # configs that haven't added the new keys.
+    #
+    # SAFETY_OVERLAP: small inward nudge (inches) that pulls each wire
+    # endpoint INTO its block, so the new wire visually merges with the
+    # existing rail polyline even if the rail's vertex coords drift by a
+    # fraction of an inch (post-straighten snap residue, etc). 2" masks
+    # typical sub-inch drift without bleeding into interior block content.
+    SAFETY_OVERLAP = float(mstp_cfg.get("safety_overlap", 2.0))
+    # ROW_WRAP_BRIDGE_OFFSET: lateral distance (inches) the wire is pushed
+    # outside the block bbox when chaining around a row-wrap.
+    ROW_WRAP_BRIDGE_OFFSET = float(mstp_cfg.get("row_wrap_bridge_offset", 30.0))
+    # Cross-page wire margins. See config _comment for which knob applies when.
+    _cross_cfg = mstp_cfg.get("cross_page_wire_margin", {})
+    CROSS_PAGE_INWARD = float(_cross_cfg.get("inward", 15.0))
+    CROSS_PAGE_ANCHOR_FALLBACK = float(_cross_cfg.get("anchor_fallback", 20.0))
+    CROSS_PAGE_DEFAULT = float(_cross_cfg.get("default", 80.0))
 
     def _outgoing_world(p: Placement, p_ports: dict) -> tuple[float, float] | None:
         """Outgoing-wire endpoint for placement `p`, shifted inward by SAFETY_OVERLAP.
@@ -559,13 +571,13 @@ def draw_mstp_wires(
         # Cross-page wire: route through the page's left margin so the wire
         # wraps around the title-block area instead of crossing through it.
         if prev.page_idx != cur.page_idx:
-            margin_x = 80.0  # default fallback
+            margin_x = CROSS_PAGE_DEFAULT
             if layout is not None:
                 page_bounds = getattr(layout, "_page_bounds", None)
                 if page_bounds:
-                    margin_x = float(page_bounds[0]) + 15.0  # 15" inside left page edge
+                    margin_x = float(page_bounds[0]) + CROSS_PAGE_INWARD
                 else:
-                    margin_x = layout.anchor_x - 20.0
+                    margin_x = layout.anchor_x - CROSS_PAGE_ANCHOR_FALLBACK
             pts = [
                 out_world,
                 (margin_x, out_world[1]),
@@ -604,9 +616,9 @@ def draw_mstp_wires(
             # Row wrap (within one page). Chain ends on the right (L→R end)
             # or left (R→L end). Bridge to the corresponding outer margin.
             if prev.is_reversed:
-                bridge_x = min(prev.x, cur.x) - 30.0
+                bridge_x = min(prev.x, cur.x) - ROW_WRAP_BRIDGE_OFFSET
             else:
-                bridge_x = max(prev.x + prev.width, cur.x + cur.width) + 30.0
+                bridge_x = max(prev.x + prev.width, cur.x + cur.width) + ROW_WRAP_BRIDGE_OFFSET
 
         # Build the polyline. For same Y on same row we can run straight;
         # otherwise route via block-edge → bridge → block-edge so the wire

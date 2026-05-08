@@ -91,6 +91,14 @@
     "_comment": "Per-variant ACM/comm-bus port offsets, originally hand-measured then refreshed via tools/anchored_refresh.py (run after any straighten_polylines pass that may have nudged rail vertices). 'in_offset' missing on _START variants because they begin the comm trunk and have no IN port. wire_width is the polyline width to draw (matches the existing rail at 1 7/8\").",
     "enabled": true,
     "wire_width": 1.875,
+    "safety_overlap": 2.0,
+    "row_wrap_bridge_offset": 30.0,
+    "cross_page_wire_margin": {
+      "_comment": "Cross-page MSTP wires route through a vertical column in the page's left margin so they wrap around the title block. 'inward' = inches inside the page's left edge (used when layout._page_bounds is set). 'anchor_fallback' = anchor_x - this many inches (used when _page_bounds isn't set). 'default' = absolute X (used when no layout is passed at all).",
+      "inward": 15.0,
+      "anchor_fallback": 20.0,
+      "default": 80.0
+    },
     "eol_block": "blocks/misc/eol.dwg",
     "ports": {
       "SAV_SINGLE_PBC_ACM_START": {

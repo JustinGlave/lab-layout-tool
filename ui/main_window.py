@@ -52,6 +52,7 @@ from cad.blocks import (
 )
 
 from .components import (
+    BackgroundWatermarkWidget,
     HintLabel,
     NoScrollComboBox,
     NoScrollDateEdit,
@@ -495,7 +496,15 @@ class MainWindow(QMainWindow):
     # ── Layout ────────────────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
-        central = QWidget()
+        # Central widget paints the orange-themed app icon as a faint
+        # watermark behind the form (matches Phoenix-Checkout-Tool's
+        # _BgWidget pattern). Mouse events pass through to its layout's
+        # children — the watermark is non-interactive.
+        central = BackgroundWatermarkWidget(
+            image_path=_resource_path("LLT_Transparent.png"),
+            opacity=0.06,        # subtle — not so loud the form gets hard to read
+            width_ratio=0.45,    # fits a centered logo at ~45% of window width
+        )
         central.setObjectName("mainContent")
         self.setCentralWidget(central)
 

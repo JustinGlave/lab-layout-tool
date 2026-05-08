@@ -19,7 +19,10 @@ Containers:
 
 from __future__ import annotations
 
+import os
+
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QPainter, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
@@ -249,3 +252,46 @@ class UpdateBanner(QFrame):
         dismiss_btn.setToolTip("Dismiss")
         dismiss_btn.clicked.connect(self.hide)
         layout.addWidget(dismiss_btn)
+
+
+# ── Background watermark ──────────────────────────────────────────────────────
+
+
+class BackgroundWatermarkWidget(QWidget):
+    """Container widget that paints a centered, low-opacity logo behind its
+    children. Use as the parent for a layout to show a subtle watermark behind
+    the form (matches Phoenix-Checkout-Tool's _BgWidget pattern).
+
+    Mouse events pass through the widget itself; only its layout's children
+    interact with input. Pixmap loaded once at construction; if the file is
+    missing, the widget renders as a plain background with no watermark.
+    """
+
+    def __init__(self, image_path: str = '', opacity: float = 0.12,
+                 width_ratio: float = 0.45, parent=None):
+        super().__init__(parent)
+        self._opacity = float(opacity)
+        self._width_ratio = float(width_ratio)
+        self._pixmap = QPixmap()
+        if image_path and os.path.isfile(image_path):
+            loaded = QPixmap(image_path)
+            if not loaded.isNull():
+                self._pixmap = loaded
+
+    def paintEvent(self, event):
+        # Clear background per QSS first by calling super (so the parent's
+        # styled fill applies), then overlay the watermark.
+        super().paintEvent(event)
+        if self._pixmap.isNull():
+            return
+        painter = QPainter(self)
+        painter.setOpacity(self._opacity)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        target_w = max(1, int(self.width() * self._width_ratio))
+        scaled = self._pixmap.scaledToWidth(
+            target_w, Qt.TransformationMode.SmoothTransformation,
+        )
+        x = (self.width() - scaled.width()) // 2
+        y = (self.height() - scaled.height()) // 2
+        painter.drawPixmap(x, y, scaled)
+

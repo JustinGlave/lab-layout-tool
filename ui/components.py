@@ -24,8 +24,10 @@ import os
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPainter, QPixmap
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDateEdit,
+    QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -295,3 +297,67 @@ class BackgroundWatermarkWidget(QWidget):
         y = (self.height() - scaled.height()) // 2
         painter.drawPixmap(x, y, scaled)
 
+
+
+# ── Welcome dialog (first-run guidance) ───────────────────────────────────────
+
+
+class WelcomeDialog(QDialog):
+    """First-run orientation modal — explains the typical workflow and exposes
+    a 'Don't show again' checkbox. The host stores the checkbox state in
+    QSettings; this widget is just the UI."""
+
+    def __init__(self, parent: QWidget | None = None,
+                 dont_show_default: bool = False):
+        super().__init__(parent)
+        self.setWindowTitle("Welcome to Lab Layout Tool")
+        self.setModal(True)
+        self.resize(600, 520)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 16)
+        layout.setSpacing(14)
+
+        layout.addWidget(PageTitle("Welcome"))
+        layout.addWidget(PageSubtitle(
+            "Generate as-built valve drawings from a form. Here's the gist."
+        ))
+
+        body = QLabel(
+            "<ol style='margin-left:-18px;'>"
+            "<li><b>Fill in the project metadata</b> at the top — job name, "
+            "job number, technician, date, product line.</li>"
+            "<li><b>Set the room count</b> and name each room in its tab "
+            "(e.g. <code>LAB 101</code>).</li>"
+            "<li><b>Pick valves per category</b> (SAV / GEX / FEV / AUX) "
+            "with a count, variant, and tag (free-form, e.g. "
+            "<code>PSV-1</code>).</li>"
+            "<li><b>Optionally add PBCs</b> per room — click an Edit button "
+            "to open the wizard, fill in the PBC fields, and link valves "
+            "to COM1 or COM2.</li>"
+            "<li><b>Click Generate Drawing</b> (or Ctrl+G). BricsCAD opens "
+            "and the DWG lands in <code>jobs/drawings/</code>.</li>"
+            "</ol>"
+            "<p>Tip: <b>Tools → Test → Quick Test</b> loads a 3-lab CSCP "
+            "project and generates immediately — the fastest way to confirm "
+            "BricsCAD is wired up correctly.</p>"
+        )
+        body.setWordWrap(True)
+        body.setTextFormat(Qt.TextFormat.RichText)
+        layout.addWidget(body, 1)
+
+        layout.addStretch(0)
+
+        bottom = QHBoxLayout()
+        self.dont_show_cb = QCheckBox("Don't show this on launch")
+        self.dont_show_cb.setChecked(dont_show_default)
+        bottom.addWidget(self.dont_show_cb)
+        bottom.addStretch(1)
+        ok = PrimaryButton("Got it")
+        ok.setDefault(True)
+        ok.clicked.connect(self.accept)
+        bottom.addWidget(ok)
+        layout.addLayout(bottom)
+
+    def dont_show_again(self) -> bool:
+        return self.dont_show_cb.isChecked()

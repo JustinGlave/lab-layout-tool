@@ -65,6 +65,7 @@ from .components import (
     SectionTitle,
     TertiaryButton,
     UpdateBanner,
+    WelcomeDialog,
     button_row,
 )
 from .pbc import PBCSection
@@ -420,6 +421,10 @@ class MainWindow(QMainWindow):
         self._sync_rooms_to_count()
         self._refresh_tree()
         self._check_for_updates()
+        # First-run guidance — defer to next event loop tick so the main
+        # window has finished its initial paint before the modal pops.
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(0, self._show_welcome_if_first_run)
 
     # ── Menu bar ──────────────────────────────────────────────────────────────
 
@@ -485,6 +490,9 @@ class MainWindow(QMainWindow):
         test_menu.addAction(full_act)
 
         help_menu = mb.addMenu("Help")
+        welcome_act = QAction("Show Welcome", self)
+        welcome_act.triggered.connect(lambda: self._show_welcome(force=True))
+        help_menu.addAction(welcome_act)
         check_updates_act = QAction("Check for Updates", self)
         check_updates_act.triggered.connect(self._check_for_updates_now)
         help_menu.addAction(check_updates_act)
@@ -1253,6 +1261,32 @@ class MainWindow(QMainWindow):
                 f"You can install manually from:\n"
                 f"https://github.com/{updater.GITHUB_OWNER}/{updater.GITHUB_REPO}/releases/latest",
             )
+
+    # ── Welcome dialog ────────────────────────────────────────────────────────
+
+    def _show_welcome_if_first_run(self) -> None:
+        """Called from __init__ via a 0-ms QTimer. Pops the welcome dialog
+        unless the user has previously checked 'Don't show again'."""
+        s = QSettings(ORG_NAME, APP_NAME)
+        if s.value("welcome_dismissed", False, type=bool):
+            return
+        self._show_welcome(force=False)
+
+    def _show_welcome(self, force: bool = False) -> None:
+        """Show the welcome dialog. `force=True` from the Help menu always
+        shows it even if previously dismissed; `force=False` from the
+        first-run check respects the user's prior choice."""
+        s = QSettings(ORG_NAME, APP_NAME)
+        prev = s.value("welcome_dismissed", False, type=bool)
+        dlg = WelcomeDialog(parent=self, dont_show_default=prev)
+        dlg.exec()
+        # Only persist a "checked" state — explicit-show from the menu
+        # shouldn't unset a prior preference if the user leaves it unchecked.
+        if dlg.dont_show_again():
+            s.setValue("welcome_dismissed", True)
+        elif force:
+            # User opened from menu, unchecked the box → re-enable on next launch
+            s.setValue("welcome_dismissed", False)
 
     # ── QSettings ─────────────────────────────────────────────────────────────
 

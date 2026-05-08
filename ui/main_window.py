@@ -100,6 +100,11 @@ class CategorySection(Panel):
         self._variants: list[BlockVariant] = []
         self._combos: list[NoScrollComboBox] = []
         self._tags: list[QLineEdit] = []
+        # Up/down reorder buttons live alongside each row's combo + tag.
+        # Tracking them lets _refresh_reorder_buttons disable the first row's
+        # ↑ and the last row's ↓ so users can't move past either edge.
+        self._up_btns: list[TertiaryButton] = []
+        self._down_btns: list[TertiaryButton] = []
 
         body: QVBoxLayout = self.layout()  # provided by Panel
 
@@ -130,6 +135,12 @@ class CategorySection(Panel):
         tag_h = HintLabel("Tag")
         tag_h.setFixedWidth(140)
         header_layout.addWidget(tag_h)
+        # Spacers for the reorder column so the header columns line up with
+        # the body rows (each row has up + down buttons at 32px each).
+        reorder_h = HintLabel("Order")
+        reorder_h.setFixedWidth(32 + 8 + 32)   # ↑ + spacing + ↓
+        reorder_h.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        header_layout.addWidget(reorder_h)
         body.addWidget(self._header_widget)
         self._header_widget.hide()
 
@@ -189,16 +200,85 @@ class CategorySection(Panel):
             tag_edit.setFixedWidth(140)
             tag_edit.textChanged.connect(self.changed.emit)
             row.addWidget(tag_edit)
+            # Reorder buttons. Lambdas capture the row index; rows never get
+            # inserted/removed from the layout (we swap CONTENTS, not widgets),
+            # so the captured int stays valid for the row's lifetime.
+            row_idx = i - 1
+            up_btn = TertiaryButton("↑")
+            up_btn.setFixedWidth(32)
+            up_btn.setMinimumHeight(32)
+            up_btn.setToolTip("Move this valve up — affects MSTP chain order")
+            up_btn.clicked.connect(
+                lambda _checked=False, idx=row_idx: self._move_row(idx, -1)
+            )
+            row.addWidget(up_btn)
+            down_btn = TertiaryButton("↓")
+            down_btn.setFixedWidth(32)
+            down_btn.setMinimumHeight(32)
+            down_btn.setToolTip("Move this valve down — affects MSTP chain order")
+            down_btn.clicked.connect(
+                lambda _checked=False, idx=row_idx: self._move_row(idx, +1)
+            )
+            row.addWidget(down_btn)
             self.rows_layout.addLayout(row)
             self._combos.append(combo)
             self._tags.append(tag_edit)
+            self._up_btns.append(up_btn)
+            self._down_btns.append(down_btn)
         while len(self._combos) > n:
             self._combos.pop()
             self._tags.pop()
+            self._up_btns.pop()
+            self._down_btns.pop()
             row_item = self.rows_layout.takeAt(self.rows_layout.count() - 1)
             _delete_layout(row_item)
         self._header_widget.setVisible(n > 0)
         self._refresh_hint_visibility()
+        self._refresh_reorder_buttons()
+        self.changed.emit()
+
+    def _refresh_reorder_buttons(self):
+        """Disable ↑ on the first row and ↓ on the last row."""
+        n = len(self._up_btns)
+        for i, btn in enumerate(self._up_btns):
+            btn.setEnabled(i > 0)
+        for i, btn in enumerate(self._down_btns):
+            btn.setEnabled(i < n - 1)
+
+    def _move_row(self, idx: int, delta: int):
+        """Swap row `idx`'s contents with its neighbor at `idx + delta`.
+
+        Swaps VALUES (combo selection + tag text) rather than the widgets
+        themselves — simpler and avoids re-wiring the captured-index lambdas
+        on the up/down buttons. Reorder affects flatten_job's chain order,
+        which determines MSTP wiring sequence.
+        """
+        target = idx + delta
+        if not (0 <= idx < len(self._combos)) or not (0 <= target < len(self._combos)):
+            return
+        a_data = self._combos[idx].currentData()
+        b_data = self._combos[target].currentData()
+        a_tag = self._tags[idx].text()
+        b_tag = self._tags[target].text()
+
+        # Block change signals during the swap so we emit `changed` once at
+        # the end instead of four times mid-flight.
+        for w in (self._combos[idx], self._combos[target],
+                  self._tags[idx], self._tags[target]):
+            w.blockSignals(True)
+        try:
+            i_for_b = self._combos[idx].findData(b_data)
+            t_for_a = self._combos[target].findData(a_data)
+            if i_for_b >= 0:
+                self._combos[idx].setCurrentIndex(i_for_b)
+            if t_for_a >= 0:
+                self._combos[target].setCurrentIndex(t_for_a)
+            self._tags[idx].setText(b_tag)
+            self._tags[target].setText(a_tag)
+        finally:
+            for w in (self._combos[idx], self._combos[target],
+                      self._tags[idx], self._tags[target]):
+                w.blockSignals(False)
         self.changed.emit()
 
     def _refresh_hint_visibility(self):

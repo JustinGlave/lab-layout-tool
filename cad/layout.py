@@ -49,12 +49,6 @@ class LayoutSpec:
     rows_per_page: int = 2       # rows per page before jumping to next page
 
 
-@dataclass
-class PageSpec:
-    width: float
-    height: float
-
-
 def flatten_job(job: dict) -> list[Placement]:
     """Convert a single-room dict (with SAV/GEX/FEV/AUX keys) into Placements."""
     out: list[Placement] = []
@@ -69,11 +63,6 @@ def flatten_job(job: dict) -> list[Placement]:
                 )
             )
     return out
-
-
-def page_from_config(cfg: dict) -> PageSpec:
-    p = cfg["page"]
-    return PageSpec(width=p["width"], height=p["height"])
 
 
 def layout_from_config(cfg: dict) -> LayoutSpec:
@@ -92,15 +81,3 @@ def layout_from_config(cfg: dict) -> LayoutSpec:
     )
 
 
-def assign_tags(
-    placements: list[Placement],
-    prefixes: dict[str, str] | None = None,
-) -> None:
-    """Reserved for future user-input labeling. Currently unused."""
-    prefixes = prefixes or {}
-    counters: dict[str, int] = {}
-    for p in placements:
-        prefix = prefixes.get(p.category, p.category)
-        n = counters.get(prefix, 0) + 1
-        counters[prefix] = n
-        p.tag = f"{prefix}-{n}"

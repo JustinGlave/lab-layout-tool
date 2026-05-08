@@ -17,7 +17,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QDate, QSettings, Qt, QThread, Signal
+from PySide6.QtCore import QDate, QSettings, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QAction, QCursor, QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -513,7 +513,6 @@ class MainWindow(QMainWindow):
         self._check_for_updates()
         # First-run guidance — defer to next event loop tick so the main
         # window has finished its initial paint before the modal pops.
-        from PySide6.QtCore import QTimer
         QTimer.singleShot(0, self._show_welcome_if_first_run)
 
     # ── Menu bar ──────────────────────────────────────────────────────────────

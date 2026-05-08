@@ -29,15 +29,17 @@ from PySide6.QtWidgets import (
     QDateEdit,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFileDialog,
+    QFormLayout,
     QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QPushButton,
     QSpinBox,
-    QDoubleSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -432,12 +434,10 @@ class PreferencesDialog(QDialog):
             "still override these."
         ))
 
-        from PySide6.QtWidgets import QFormLayout
         form = QFormLayout()
         form.setHorizontalSpacing(12)
         form.setVerticalSpacing(10)
 
-        from PySide6.QtWidgets import QLineEdit
         self._office_edit = QLineEdit(office)
         self._office_edit.setMinimumHeight(32)
         self._office_edit.setPlaceholderText("e.g. ATS Automation Inc.")

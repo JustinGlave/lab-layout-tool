@@ -33,7 +33,6 @@ from cad.blocks import CATEGORIES
 
 from .components import (
     HintLabel,
-    NoScrollComboBox,
     NoScrollSpinBox,
     Panel,
     PhoenixTable,
@@ -45,22 +44,6 @@ from .components import (
 
 if TYPE_CHECKING:
     from .main_window import RoomEditor
-
-
-def _delete_layout(item):
-    layout = item.layout() if hasattr(item, "layout") else None
-    if layout is None:
-        w = item.widget() if hasattr(item, "widget") else None
-        if w is not None:
-            w.deleteLater()
-        return
-    while layout.count():
-        child = layout.takeAt(0)
-        w = child.widget() if hasattr(child, "widget") else None
-        if w is not None:
-            w.deleteLater()
-        else:
-            _delete_layout(child)
 
 
 # ── Single PBC editor ─────────────────────────────────────────────────────────

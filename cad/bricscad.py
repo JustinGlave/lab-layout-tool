@@ -59,6 +59,20 @@ def _log_swallowed(
         pass
 
 
+# Audit C16/F2 — swallowed-exception logging discipline.
+# Use `_log_swallowed` for COM ops where failure changes user-visible output
+# (attributes not filling, polyline widths missing, labels not drawn). Keep
+# bare `except Exception: pass` for per-entity scans where the entity is
+# skipped on failure — the absence itself is the diagnostic, and per-entity
+# logging would drown the useful signal.
+#
+# Active call sites:
+#   - add_polyline_with_width.ConstantWidth
+#   - add_tag_labels[<tag>]
+#   - update_title_block.iter
+#   - extend_template_pages.snapshot-bbox-read
+
+
 class CadError(RuntimeError):
     pass
 
@@ -445,8 +459,8 @@ def add_polyline_with_width(
     if width and width > 0:
         try:
             pl.ConstantWidth = float(width)
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            _log_swallowed("add_polyline.ConstantWidth", exc)
     return pl
 
 
@@ -516,6 +530,11 @@ def draw_mstp_wires(
         return (x, y)
 
     notes: list[str] = []
+    if width <= 0:
+        notes.append(
+            f"  WARN mstp.wire_width is {width!r} (config missing or 0); "
+            f"wires will draw as hairlines and may not visually merge with rails"
+        )
     drawn = 0
     for prev, cur in zip(placements, placements[1:]):
         prev_ports = ports.get(prev.variant_id, {})
@@ -747,7 +766,7 @@ def update_title_block(
                         except Exception as exc:  # noqa: BLE001
                             notes.append(f"  [{lname}] {tag} write failed: {exc}")
     except Exception as exc:  # noqa: BLE001
-        notes.append(f"  iter error: {exc}")
+        _log_swallowed("update_title_block.iter", exc, notes=notes)
 
     if log_path is not None and notes:
         try:
@@ -781,8 +800,8 @@ def add_tag_labels(
         try:
             session.model_space.AddText(p.tag, _variant_point(text_x, ty), height)
             drawn += 1
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            _log_swallowed(f"add_tag_labels[{p.tag}]", exc)
     return drawn
 
 

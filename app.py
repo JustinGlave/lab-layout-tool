@@ -112,7 +112,14 @@ def generate(project: dict) -> Path:
             return max(1, (valves + 4) // 5)
 
         n_pbcs_total = sum(len(r.get("pbcs", []) or []) for r in rooms)
-        n_pbc_pages_needed = (n_pbcs_total + 6) // 7 if n_pbcs_total else 0
+        # PBCs-per-page comes from config so this estimate stays in sync with
+        # cad/pbc.py's actual page-wrap behavior. Default 7 matches the
+        # pre-config-consolidation hardcoded value.
+        pbc_per_page = int(cfg.get("pbc", {}).get("per_page", 7))
+        n_pbc_pages_needed = (
+            (n_pbcs_total + pbc_per_page - 1) // pbc_per_page
+            if n_pbcs_total else 0
+        )
         estimated_room_pages = sum(_estimate_room_pages(r) for r in rooms)
         # +2 buffer so a room overshooting its estimate still lands on a border
         total_pages_needed = n_pbc_pages_needed + estimated_room_pages + 2

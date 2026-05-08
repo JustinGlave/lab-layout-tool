@@ -388,7 +388,7 @@ class RoomEditor(QWidget):
             sec.set_variants(list_variants(pl, cat))
 
     def collect(self) -> dict:
-        room: dict = {"name": self.room_name(), "SAV": [], "GEX": [], "FEV": [], "AUX": []}
+        room: dict = {"name": self.room_name(), **{cat: [] for cat in CATEGORIES}}
         for cat, sec in self.sections.items():
             for variant, tag in sec.selections():
                 room[cat].append({
@@ -495,6 +495,7 @@ class MainWindow(QMainWindow):
         self._update_info: UpdateInfo | None = None
         self._update_banner: UpdateBanner | None = None
         self._suppress_tree_refresh = False
+        self._loading_project = False
 
         self.setWindowTitle(f"{self.APP_NAME} — v{version}")
         self.resize(1280, 880)
@@ -779,8 +780,11 @@ class MainWindow(QMainWindow):
 
         # Removing rooms that contain user data (valves or PBCs) is
         # destructive and not undoable. Confirm first; revert the spinbox
-        # silently if the user backs out.
-        if target < current:
+        # silently if the user backs out. Skip the prompt during a project
+        # load — the user already chose to open a different project, and
+        # re-confirming during load is jarring (G2 fix).
+        skip_destructive_confirm = getattr(self, "_loading_project", False)
+        if target < current and not skip_destructive_confirm:
             doomed_with_data: list[str] = []
             for i in range(target, current):
                 room = self.room_tabs.widget(i)
@@ -1071,6 +1075,7 @@ class MainWindow(QMainWindow):
         self._resolve_block_paths(data)
 
         self._suppress_tree_refresh = True
+        self._loading_project = True
         try:
             self.job_name.setText(data.get("job_name", ""))
             self.job_name_bottom.setText(data.get("job_name_bottom", ""))
@@ -1099,6 +1104,7 @@ class MainWindow(QMainWindow):
                     self._update_tab_label(room_widget)
         finally:
             self._suppress_tree_refresh = False
+            self._loading_project = False
         self._refresh_tree()
         self.statusBar().showMessage(f"Loaded {path.name}", 5000)
         return True

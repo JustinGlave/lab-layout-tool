@@ -23,6 +23,7 @@ which returns the number of PBC pages drawn (0 if no room has any PBCs).
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from .blocks import CATEGORIES, load_config
@@ -278,13 +279,17 @@ def _scrub_pbc_page_top(
     # Top ~14% of the page (corresponds to y > 850 on page 1 with 33..984 bounds).
     scrub_y_min = y_min + 0.86 * (y_max - y_min)
 
+    swallow_notes: list[str] = []
     to_delete: list = []
     for ent in session.model_space:
         try:
             minp, maxp = ent.GetBoundingBox()
             bx_min, by_min = float(minp[0]), float(minp[1])
             bx_max, by_max = float(maxp[0]), float(maxp[1])
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
+            _log_swallowed(
+                "scrub_pbc_page.bbox-read", exc, notes=swallow_notes,
+            )
             continue
         # Strict containment — preserves the page border (whose bbox is the
         # whole page rectangle) while catching anything that lives inside the
@@ -300,8 +305,8 @@ def _scrub_pbc_page_top(
         try:
             ent.Delete()
             deleted += 1
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            _log_swallowed("scrub_pbc_page.delete", exc, notes=swallow_notes)
 
     if log_path is not None:
         try:
@@ -310,7 +315,11 @@ def _scrub_pbc_page_top(
                     f"\n--- PBC page scrub ---\n  removed {deleted} entities "
                     f"(strip y in [{scrub_y_min:.0f}, {y_max:.0f}])\n"
                 )
+                if swallow_notes:
+                    f.write("\n".join(swallow_notes) + "\n")
         except Exception:  # noqa: BLE001
+            # Log-write failure — leave silent. _log_swallowed's IO fallback
+            # would target the same file and could fail again recursively.
             pass
     return deleted
 
@@ -503,11 +512,17 @@ def generate_pbc_page(
     """
     pbc_body_path = pbc_blocks_dir / "pbc.dwg"
     if not pbc_body_path.is_file():
+        # Print to stderr unconditionally — a missing PBC body block is a
+        # real configuration problem and should not be invisible just
+        # because the caller didn't pass a log_path.
+        msg = f"PBC page skipped: missing {pbc_body_path}"
+        print(f"WARNING: {msg}", file=sys.stderr)
         if log_path is not None:
             try:
                 with log_path.open("a", encoding="utf-8") as f:
-                    f.write(f"\nPBC page skipped: missing {pbc_body_path}\n")
+                    f.write(f"\n{msg}\n")
             except Exception:  # noqa: BLE001
+                # Log-write failure — already printed to stderr.
                 pass
         return 0
 

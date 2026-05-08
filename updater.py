@@ -49,9 +49,11 @@ GITHUB_OWNER = "JustinGlave"
 GITHUB_REPO  = "lab-layout-tool"
 # ──────────────────────────────────────────────────────────────────────────────
 
-EXE_NAME       = "LabLayoutTool.exe"
-APP_DIR_NAME   = "LabLayoutTool"  # folder name PyInstaller produces (inside or outside zip root)
-ZIP_ASSET_NAME = "LabLayoutTool.zip"
+EXE_NAME         = "LabLayoutTool.exe"
+APP_DIR_NAME     = "LabLayoutTool"  # folder name PyInstaller produces (inside or outside zip root)
+ZIP_ASSET_NAME   = "LabLayoutTool.zip"
+APP_DISPLAY_NAME = "Lab Layout Tool"   # human-friendly name (logs, status messages)
+USER_AGENT       = "LabLayoutTool"     # HTTP User-Agent (no .exe suffix — matches GitHub-API conventions)
 
 RELEASES_API = (
     f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
@@ -91,7 +93,7 @@ def check_for_update() -> Optional[UpdateInfo]:
             RELEASES_API,
             headers={
                 "Accept": "application/vnd.github+json",
-                "User-Agent": EXE_NAME,
+                "User-Agent": USER_AGENT,
             },
         )
         with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
@@ -235,7 +237,7 @@ def _build_update_batch(pid: int, ps_path: Path, exe_path: Path) -> str:
     return f"""@echo off
 setlocal
 set "LOG=%TEMP%\\LabLayoutTool_update.log"
-echo Waiting for {EXE_NAME} to close... > "%LOG%"
+echo Waiting for {APP_DISPLAY_NAME} to close... > "%LOG%"
 :wait
 tasklist /FI "PID eq {pid}" 2>nul | find "{pid}" >nul
 if not errorlevel 1 (
@@ -281,7 +283,7 @@ def download_and_apply(info: UpdateInfo, progress_callback=None) -> None:
     try:
         req = urllib.request.Request(
             info.download_url,
-            headers={"User-Agent": EXE_NAME},
+            headers={"User-Agent": USER_AGENT},
         )
         with urllib.request.urlopen(req, timeout=60) as resp:
             total = int(resp.headers.get("Content-Length", 0))

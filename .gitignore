@@ -44,4 +44,4 @@ crash_report.txt
 blocks/**/*.png
 
 # Local-only AI agent tooling
-.claude/settings.local.json
+.claude/

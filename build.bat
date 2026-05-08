@@ -25,7 +25,15 @@ echo.
 
 rem Step 0: sanity checks + sync embedded QSS from source
 echo [0/4] Running sanity checks...
-.venv\Scripts\python -m py_compile version.py app.py ui\style.py ui\components.py ui\main_window.py cad\blocks.py cad\layout.py cad\bricscad.py
+findstr /C:"Current Version: v%VERSION%" README.md >nul
+if errorlevel 1 (
+    echo.
+    echo ERROR: README.md "Current Version" line does not match version.py v%VERSION%.
+    echo        Bump the README before building.
+    exit /b 1
+)
+
+.venv\Scripts\python -m py_compile version.py app.py updater.py ui\style.py ui\components.py ui\main_window.py ui\pbc.py cad\blocks.py cad\layout.py cad\bricscad.py cad\pbc.py cad\migrate.py
 if errorlevel 1 (
     echo.
     echo ERROR: Python compile check failed.
@@ -110,7 +118,12 @@ if errorlevel 1 (
     echo ERROR: Inno Setup build failed.
     exit /b 1
 )
-echo [2/4] Installer complete.
+if not exist "dist\LabLayoutToolSetup.exe" (
+    echo.
+    echo ERROR: Installer output missing dist\LabLayoutToolSetup.exe.
+    exit /b 1
+)
+echo [2/4] Installer created: dist\LabLayoutToolSetup.exe
 echo.
 
 rem Step 3: Create zips
@@ -157,8 +170,13 @@ echo  Build complete - v%VERSION%
 echo ============================================================
 echo.
 echo  dist\LabLayoutTool\LabLayoutTool.exe   ^<-- test this first
+echo  dist\LabLayoutToolSetup.exe            ^<-- installer
 echo  dist\LabLayoutTool.zip                 ^<-- auto-updater zip
 echo  dist\LabLayoutTool_FullInstall.zip     ^<-- manual install zip
+echo.
+echo  Upload to GitHub Release:
+echo    - LabLayoutTool.zip                  (required for auto-updater)
+echo    - LabLayoutToolSetup.exe             (recommended for new users)
 echo.
 
 endlocal

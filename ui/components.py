@@ -28,14 +28,18 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
     QDialog,
+    QDialogButtonBox,
+    QFileDialog,
     QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QMessageBox,
     QPushButton,
     QSpinBox,
     QDoubleSpinBox,
     QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -361,3 +365,129 @@ class WelcomeDialog(QDialog):
 
     def dont_show_again(self) -> bool:
         return self.dont_show_cb.isChecked()
+
+
+# ── Job browser dialog ────────────────────────────────────────────────────────
+
+
+class JobBrowserDialog(QDialog):
+    """Project picker — lists every *.json in the jobs/ directory with quick
+    metadata (job name, rooms, product line, modified date) and lets the user
+    pick one. Falls back to a system file dialog for projects elsewhere on disk.
+
+    Usage:
+        dlg = JobBrowserDialog(jobs_dir=JOBS_DIR, parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            path = dlg.selected_path  # pathlib.Path or None
+    """
+
+    def __init__(self, jobs_dir, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setWindowTitle("Open Project")
+        self.setModal(True)
+        self.resize(720, 480)
+
+        from pathlib import Path
+        self._jobs_dir = Path(jobs_dir)
+        self.selected_path = None  # set on accept
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 16)
+        layout.setSpacing(12)
+
+        layout.addWidget(SectionTitle(f"Projects in {self._jobs_dir.name}/"))
+        layout.addWidget(HintLabel(
+            "Double-click a row to open, or use the buttons below. "
+            "Select 'Browse for other file…' to load a project from outside this folder."
+        ))
+
+        self._table = PhoenixTable(0, 4)
+        self._table.setHorizontalHeaderLabels(
+            ["File", "Job name", "Rooms", "Modified"]
+        )
+        self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        # Column sizing — file/name flex, rooms/modified fixed-ish
+        header = self._table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+        self._table.setColumnWidth(2, 70)
+        self._table.setColumnWidth(3, 160)
+        self._table.itemDoubleClicked.connect(self._on_double_click)
+        layout.addWidget(self._table, 1)
+
+        bottom = QHBoxLayout()
+        browse_btn = TertiaryButton("Browse for other file…")
+        browse_btn.clicked.connect(self._on_browse)
+        bottom.addWidget(browse_btn)
+        bottom.addStretch(1)
+        cancel_btn = TertiaryButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        bottom.addWidget(cancel_btn)
+        open_btn = PrimaryButton("Open")
+        open_btn.setDefault(True)
+        open_btn.clicked.connect(self._on_open)
+        bottom.addWidget(open_btn)
+        layout.addLayout(bottom)
+
+        self._populate()
+
+    def _populate(self):
+        import json
+        from datetime import datetime
+        rows = []
+        for p in sorted(self._jobs_dir.glob("*.json")):
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+            except Exception:
+                rows.append((p, p.name, "(unreadable)", "?", p.stat().st_mtime))
+                continue
+            name = (data.get("job_name") or data.get("name") or "").strip() or "(untitled)"
+            rooms = data.get("rooms")
+            n_rooms = str(len(rooms)) if isinstance(rooms, list) else "v1"
+            rows.append((p, p.name, name, n_rooms, p.stat().st_mtime))
+        # Newest first
+        rows.sort(key=lambda r: r[4], reverse=True)
+
+        self._table.setRowCount(len(rows))
+        for r_idx, (p, fname, name, n_rooms, mtime) in enumerate(rows):
+            file_item = QTableWidgetItem(fname)
+            file_item.setData(Qt.ItemDataRole.UserRole, str(p))
+            self._table.setItem(r_idx, 0, file_item)
+            self._table.setItem(r_idx, 1, QTableWidgetItem(name))
+            self._table.setItem(r_idx, 2, QTableWidgetItem(n_rooms))
+            self._table.setItem(
+                r_idx, 3,
+                QTableWidgetItem(datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")),
+            )
+        if rows:
+            self._table.selectRow(0)
+
+    def _on_double_click(self, _item):
+        self._on_open()
+
+    def _on_open(self):
+        from pathlib import Path
+        row = self._table.currentRow()
+        if row < 0:
+            return
+        item = self._table.item(row, 0)
+        if item is None:
+            return
+        path_str = item.data(Qt.ItemDataRole.UserRole)
+        if not path_str:
+            return
+        self.selected_path = Path(path_str)
+        self.accept()
+
+    def _on_browse(self):
+        from pathlib import Path
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open Project", str(self._jobs_dir), "Project files (*.json)"
+        )
+        if path:
+            self.selected_path = Path(path)
+            self.accept()

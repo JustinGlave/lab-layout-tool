@@ -54,6 +54,7 @@ from cad.blocks import (
 from .components import (
     BackgroundWatermarkWidget,
     HintLabel,
+    JobBrowserDialog,
     NoScrollComboBox,
     NoScrollDateEdit,
     NoScrollSpinBox,
@@ -896,12 +897,16 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("New project", 3000)
 
     def _on_open_job(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Open Project", str(JOBS_DIR), "Project files (*.json)"
-        )
-        if not path:
+        # Browse jobs/*.json with a Phoenix-styled list (file, job name, room
+        # count, modified date) instead of a bare OS file picker. Has a
+        # 'Browse for other file...' fallback to the system dialog for
+        # projects living elsewhere on disk.
+        dlg = JobBrowserDialog(jobs_dir=JOBS_DIR, parent=self)
+        if dlg.exec() != JobBrowserDialog.DialogCode.Accepted:
             return
-        self._load_project_from_path(Path(path))
+        if dlg.selected_path is None:
+            return
+        self._load_project_from_path(dlg.selected_path)
 
     def _resolve_block_paths(self, data: dict) -> None:
         """Fill in missing or stale dwg_path values from variant_id.

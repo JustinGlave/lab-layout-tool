@@ -390,6 +390,130 @@ class WelcomeDialog(QDialog):
         return self.dont_show_cb.isChecked()
 
 
+# ── Preferences dialog ────────────────────────────────────────────────────────
+
+
+class PreferencesDialog(QDialog):
+    """Simple per-user preferences — default values that pre-fill a new project
+    so the user doesn't retype the same office / revision / initials each time.
+
+    The host (MainWindow) reads/writes the values through QSettings and applies
+    them to the form on New Project. This widget is just the editor; it doesn't
+    own the persistence layer.
+
+    Public properties (after exec() returns Accepted):
+        office, revision, technician  — strings, possibly empty
+        default_product_line_id       — str | None
+        reset_welcome                 — bool, True if user clicked the reset button
+    """
+
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        office: str = "",
+        revision: str = "",
+        technician: str = "",
+        product_lines: "list | None" = None,
+        default_product_line_id: str | None = None,
+    ):
+        super().__init__(parent)
+        self.setWindowTitle("Preferences")
+        self.setModal(True)
+        self.resize(520, 360)
+        self.reset_welcome = False
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 16)
+        layout.setSpacing(12)
+
+        layout.addWidget(PageTitle("Preferences"))
+        layout.addWidget(PageSubtitle(
+            "Defaults applied when starting a new project. Per-project values "
+            "still override these."
+        ))
+
+        from PySide6.QtWidgets import QFormLayout
+        form = QFormLayout()
+        form.setHorizontalSpacing(12)
+        form.setVerticalSpacing(10)
+
+        from PySide6.QtWidgets import QLineEdit
+        self._office_edit = QLineEdit(office)
+        self._office_edit.setMinimumHeight(32)
+        self._office_edit.setPlaceholderText("e.g. ATS Automation Inc.")
+        form.addRow("Default office", self._office_edit)
+
+        self._revision_edit = QLineEdit(revision)
+        self._revision_edit.setMinimumHeight(32)
+        self._revision_edit.setPlaceholderText("e.g. Record Drawing Set")
+        form.addRow("Default revision", self._revision_edit)
+
+        self._technician_edit = QLineEdit(technician)
+        self._technician_edit.setMinimumHeight(32)
+        self._technician_edit.setPlaceholderText("e.g. JMG")
+        form.addRow("Default technician", self._technician_edit)
+
+        self._product_combo = NoScrollComboBox()
+        self._product_combo.setMinimumHeight(32)
+        self._product_combo.addItem("(no preference — use first available)", None)
+        if product_lines:
+            for pl in product_lines:
+                self._product_combo.addItem(pl.display_name, pl.id)
+        if default_product_line_id:
+            idx = self._product_combo.findData(default_product_line_id)
+            if idx >= 0:
+                self._product_combo.setCurrentIndex(idx)
+        form.addRow("Default product line", self._product_combo)
+
+        layout.addLayout(form)
+        layout.addStretch(1)
+
+        # First-run welcome reset
+        welcome_row = QHBoxLayout()
+        welcome_row.addWidget(HintLabel(
+            "Want the welcome dialog back on next launch?"
+        ), 1)
+        reset_btn = TertiaryButton("Reset welcome dialog")
+        reset_btn.clicked.connect(self._on_reset_welcome)
+        welcome_row.addWidget(reset_btn)
+        layout.addLayout(welcome_row)
+
+        # Bottom buttons
+        bottom = QHBoxLayout()
+        bottom.addStretch(1)
+        cancel_btn = TertiaryButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        bottom.addWidget(cancel_btn)
+        save_btn = PrimaryButton("Save")
+        save_btn.setDefault(True)
+        save_btn.clicked.connect(self.accept)
+        bottom.addWidget(save_btn)
+        layout.addLayout(bottom)
+
+    def _on_reset_welcome(self):
+        self.reset_welcome = True
+        QMessageBox.information(
+            self, "Welcome reset",
+            "The welcome dialog will show again on the next launch.",
+        )
+
+    @property
+    def office(self) -> str:
+        return self._office_edit.text().strip()
+
+    @property
+    def revision(self) -> str:
+        return self._revision_edit.text().strip()
+
+    @property
+    def technician(self) -> str:
+        return self._technician_edit.text().strip()
+
+    @property
+    def default_product_line_id(self) -> "str | None":
+        return self._product_combo.currentData()
+
+
 # ── Job browser dialog ────────────────────────────────────────────────────────
 
 

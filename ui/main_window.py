@@ -61,6 +61,7 @@ from .components import (
     PageSubtitle,
     PageTitle,
     Panel,
+    PreferencesDialog,
     PrimaryButton,
     SecondaryButton,
     SectionTitle,
@@ -536,6 +537,11 @@ class MainWindow(QMainWindow):
         self._gen_act = gen_act
 
         file_menu.addSeparator()
+        prefs_act = QAction("Preferences…", self)
+        prefs_act.triggered.connect(self._on_preferences)
+        file_menu.addAction(prefs_act)
+
+        file_menu.addSeparator()
         exit_act = QAction("Exit", self)
         exit_act.triggered.connect(self.close)
         file_menu.addAction(exit_act)
@@ -670,18 +676,19 @@ class MainWindow(QMainWindow):
         self.office = QLineEdit()
         self.office.setPlaceholderText("Office / company name")
         self.office.setMinimumHeight(32)
-        self.office.setText("ATS Automation Inc.")
+        self.office.setText(self._prefs_get_default_office())
         meta_form.addRow("Office", self.office)
 
         self.revision = QLineEdit()
         self.revision.setPlaceholderText("Revision label (e.g. Record Drawing Set)")
         self.revision.setMinimumHeight(32)
-        self.revision.setText("Record Drawing Set")
+        self.revision.setText(self._prefs_get_default_revision())
         meta_form.addRow("Revision", self.revision)
 
         self.technician = QLineEdit()
         self.technician.setPlaceholderText("Technician initials or name")
         self.technician.setMinimumHeight(32)
+        self.technician.setText(self._prefs_get_default_technician())
         meta_form.addRow("Technician", self.technician)
 
         # QDateEdit with calendar popup — better than free-text MM/DD/YYYY
@@ -698,6 +705,15 @@ class MainWindow(QMainWindow):
         self.product_combo.setMinimumHeight(32)
         for pl in blocks.product_lines():
             self.product_combo.addItem(pl.display_name, pl)
+        # Apply the user's default product line preference (File → Preferences…)
+        # by selecting the matching item before connecting the change signal.
+        pref_pid = self._prefs_get_default_product_line_id()
+        if pref_pid:
+            for i in range(self.product_combo.count()):
+                pl = self.product_combo.itemData(i)
+                if pl and getattr(pl, "id", None) == pref_pid:
+                    self.product_combo.setCurrentIndex(i)
+                    break
         self.product_combo.currentIndexChanged.connect(self._reload_variants)
         meta_form.addRow("Product line", self.product_combo)
 
@@ -962,10 +978,19 @@ class MainWindow(QMainWindow):
             self.job_number.clear()
             self.title_top.clear()
             self.title_bottom.clear()
-            self.office.setText("ATS Automation Inc.")
-            self.revision.setText("Record Drawing Set")
-            self.technician.clear()
+            # Pull defaults from per-user preferences (File → Preferences…)
+            self.office.setText(self._prefs_get_default_office())
+            self.revision.setText(self._prefs_get_default_revision())
+            self.technician.setText(self._prefs_get_default_technician())
             self.date.setDate(QDate.currentDate())
+            # Default product line if the user has set one
+            pid = self._prefs_get_default_product_line_id()
+            if pid:
+                for i in range(self.product_combo.count()):
+                    pl = self.product_combo.itemData(i)
+                    if pl and getattr(pl, "id", None) == pid:
+                        self.product_combo.setCurrentIndex(i)
+                        break
             self.room_count.setValue(1)
             for room in self._rooms():
                 room.name_edit.clear()
@@ -1045,8 +1070,8 @@ class MainWindow(QMainWindow):
             self.job_number.setText(data.get("job_number", ""))
             self.title_top.setText(data.get("title_top", ""))
             self.title_bottom.setText(data.get("title_bottom", ""))
-            self.office.setText(data.get("office", "") or "ATS Automation Inc.")
-            self.revision.setText(data.get("revision", "") or "Record Drawing Set")
+            self.office.setText(data.get("office", "") or self._prefs_get_default_office())
+            self.revision.setText(data.get("revision", "") or self._prefs_get_default_revision())
             self.technician.setText(data.get("technician", ""))
             saved_date = data.get("date", "") or ""
             qd = QDate.fromString(saved_date, "MM/dd/yyyy") if saved_date else QDate()
@@ -1346,6 +1371,54 @@ class MainWindow(QMainWindow):
                 f"You can install manually from:\n"
                 f"https://github.com/{updater.GITHUB_OWNER}/{updater.GITHUB_REPO}/releases/latest",
             )
+
+    # ── Preferences ───────────────────────────────────────────────────────────
+
+    def _prefs_get(self, key: str, default: str = "") -> str:
+        s = QSettings(ORG_NAME, APP_NAME)
+        v = s.value(f"prefs/{key}", default)
+        return str(v) if v is not None else default
+
+    def _prefs_get_default_office(self) -> str:
+        return self._prefs_get("office", "ATS Automation Inc.")
+
+    def _prefs_get_default_revision(self) -> str:
+        return self._prefs_get("revision", "Record Drawing Set")
+
+    def _prefs_get_default_technician(self) -> str:
+        return self._prefs_get("technician", "")
+
+    def _prefs_get_default_product_line_id(self) -> "str | None":
+        v = self._prefs_get("product_line", "")
+        return v or None
+
+    def _on_preferences(self):
+        """Open the preferences dialog and persist any changes to QSettings."""
+        try:
+            pls = blocks.product_lines()
+        except Exception:  # noqa: BLE001
+            pls = []
+        dlg = PreferencesDialog(
+            parent=self,
+            office=self._prefs_get_default_office(),
+            revision=self._prefs_get_default_revision(),
+            technician=self._prefs_get_default_technician(),
+            product_lines=pls,
+            default_product_line_id=self._prefs_get_default_product_line_id(),
+        )
+        if dlg.exec() != PreferencesDialog.DialogCode.Accepted:
+            # Even on Cancel, honor an explicit "reset welcome" click
+            if dlg.reset_welcome:
+                QSettings(ORG_NAME, APP_NAME).setValue("welcome_dismissed", False)
+            return
+        s = QSettings(ORG_NAME, APP_NAME)
+        s.setValue("prefs/office", dlg.office)
+        s.setValue("prefs/revision", dlg.revision)
+        s.setValue("prefs/technician", dlg.technician)
+        s.setValue("prefs/product_line", dlg.default_product_line_id or "")
+        if dlg.reset_welcome:
+            s.setValue("welcome_dismissed", False)
+        self.statusBar().showMessage("Preferences saved", 4000)
 
     # ── Welcome dialog ────────────────────────────────────────────────────────
 

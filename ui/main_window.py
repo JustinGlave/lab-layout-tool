@@ -511,8 +511,8 @@ class MainWindow(QMainWindow):
         # children — the watermark is non-interactive.
         central = BackgroundWatermarkWidget(
             image_path=_resource_path("LLT_Transparent.png"),
-            opacity=0.06,        # subtle — not so loud the form gets hard to read
-            width_ratio=0.45,    # fits a centered logo at ~45% of window width
+            opacity=0.18,        # visible reinforcement without fighting the form
+            width_ratio=0.55,    # fits a centered logo at ~55% of window width
         )
         central.setObjectName("mainContent")
         self.setCentralWidget(central)

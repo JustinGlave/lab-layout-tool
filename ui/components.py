@@ -263,31 +263,22 @@ class UpdateBanner(QFrame):
 # ── Background watermark ──────────────────────────────────────────────────────
 
 
-class BackgroundWatermarkWidget(QWidget):
-    """Container widget that paints a centered, low-opacity logo behind its
-    children. Use as the parent for a layout to show a subtle watermark behind
-    the form (matches Phoenix-Checkout-Tool's _BgWidget pattern).
+class _WatermarkOverlay(QWidget):
+    """Internal overlay widget that paints the watermark. Attached as a
+    sibling of the form widgets but kept raised above them so the watermark
+    is visible OVER opaque Panel backgrounds, not just in the gaps between
+    them. Mouse-event-transparent so clicks fall through to siblings."""
 
-    Mouse events pass through the widget itself; only its layout's children
-    interact with input. Pixmap loaded once at construction; if the file is
-    missing, the widget renders as a plain background with no watermark.
-    """
-
-    def __init__(self, image_path: str = '', opacity: float = 0.12,
-                 width_ratio: float = 0.45, parent=None):
+    def __init__(self, pixmap: QPixmap, opacity: float, width_ratio: float, parent):
         super().__init__(parent)
+        self._pixmap = pixmap
         self._opacity = float(opacity)
         self._width_ratio = float(width_ratio)
-        self._pixmap = QPixmap()
-        if image_path and os.path.isfile(image_path):
-            loaded = QPixmap(image_path)
-            if not loaded.isNull():
-                self._pixmap = loaded
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
+        self.setAutoFillBackground(False)
 
     def paintEvent(self, event):
-        # Clear background per QSS first by calling super (so the parent's
-        # styled fill applies), then overlay the watermark.
-        super().paintEvent(event)
         if self._pixmap.isNull():
             return
         painter = QPainter(self)
@@ -300,6 +291,38 @@ class BackgroundWatermarkWidget(QWidget):
         x = (self.width() - scaled.width()) // 2
         y = (self.height() - scaled.height()) // 2
         painter.drawPixmap(x, y, scaled)
+
+
+class BackgroundWatermarkWidget(QWidget):
+    """Container widget with a watermark overlay painted ON TOP of its layout's
+    children (not behind them — Panel widgets have opaque QSS backgrounds, so
+    a behind-painted watermark would only peek through the small gaps).
+
+    The overlay is mouse-transparent and kept raised above siblings on every
+    resize and show so layout-added children don't bury it.
+    """
+
+    def __init__(self, image_path: str = '', opacity: float = 0.18,
+                 width_ratio: float = 0.55, parent=None):
+        super().__init__(parent)
+        pixmap = QPixmap()
+        if image_path and os.path.isfile(image_path):
+            loaded = QPixmap(image_path)
+            if not loaded.isNull():
+                pixmap = loaded
+        self._overlay = _WatermarkOverlay(pixmap, opacity, width_ratio, self)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # Keep the overlay sized to the full parent and on top of siblings
+        # added by the layout (Panels, splitter, tabs, etc.).
+        self._overlay.setGeometry(self.rect())
+        self._overlay.raise_()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._overlay.setGeometry(self.rect())
+        self._overlay.raise_()
 
 
 

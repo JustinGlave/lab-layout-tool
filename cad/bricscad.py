@@ -1091,15 +1091,29 @@ def _replicate_layouts_inner(
         except Exception:  # noqa: BLE001
             cvport = 1
 
-        # Step 5: ZOOM CENTER if we have a real model-viewport context
+        # Step 5: ZOOM WINDOW (explicit corners) if we have a real model-
+        # viewport context. ZOOM CENTER's height parameter has been observed
+        # to mis-fit the viewport when a long SendCommand burst queues — the
+        # viewport ends up showing ~2 pages instead of one. ZOOM WINDOW with
+        # the page rectangle's lower-left and upper-right is unambiguous and
+        # behaves consistently regardless of viewport aspect.
         if cvport != 1:
             try:
+                page_x_min = cx - (x_max - x_min) / 2.0
+                page_x_max = cx + (x_max - x_min) / 2.0
+                page_y_min = cy - page_height / 2.0
+                page_y_max = cy + page_height / 2.0
                 doc.SendCommand(
-                    f'(command "_ZOOM" "_C" (list {cx:.4f} {cy:.4f} 0.0) '
-                    f'{page_height:.4f}) '
+                    f'(command "_ZOOM" "_W" '
+                    f'(list {page_x_min:.4f} {page_y_min:.4f} 0.0) '
+                    f'(list {page_x_max:.4f} {page_y_max:.4f} 0.0)) '
                 )
                 try:
                     _ = doc.GetVariable("CDATE")   # flush command queue
+                except Exception:  # noqa: BLE001
+                    pass
+                try:
+                    pythoncom.PumpWaitingMessages()
                 except Exception:  # noqa: BLE001
                     pass
                 view_shift_count += 1

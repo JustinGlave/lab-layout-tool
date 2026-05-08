@@ -12,9 +12,9 @@ which is exactly what we want for a library of standalone DWG block files.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 import pythoncom  # type: ignore
 import win32com.client  # type: ignore
@@ -576,13 +576,11 @@ def draw_mstp_wires(
         # Compute bridge_x — a column of empty space outside both blocks
         # where the vertical wire segment lives.
         if same_row:
-            # Inter-block gap.
-            if prev.is_reversed:
-                # R→L row: prev is to the right of cur — gap is between cur's
-                # right edge and prev's left edge.
-                bridge_x = (prev_edge_x + cur_edge_x) / 2.0
-            else:
-                bridge_x = (prev_edge_x + cur_edge_x) / 2.0
+            # Inter-block gap — midpoint between adjacent block edges.
+            # Holds for both L→R and R→L rows: prev_edge_x and cur_edge_x are
+            # the *facing* edges in either direction, so the midpoint is the
+            # column of empty space between them regardless of row direction.
+            bridge_x = (prev_edge_x + cur_edge_x) / 2.0
         else:
             # Row wrap (within one page). Chain ends on the right (L→R end)
             # or left (R→L end). Bridge to the corresponding outer margin.
@@ -641,7 +639,10 @@ def update_room_text(
             text = str(ent.TextString)
         except Exception:  # noqa: BLE001
             continue
-        if not text.upper().startswith("ROOM:"):
+        # Match "ROOM:" only when followed by space/colon-space — avoids
+        # false-positive matches on user-added text like "Room Info:" that
+        # incidentally starts with the same 5 chars.
+        if not re.match(r"^\s*ROOM:\s", text, re.IGNORECASE):
             continue
         try:
             ip = ent.InsertionPoint
@@ -842,7 +843,6 @@ def replicate_paper_space_layouts(
 
     # Generate new sheet names by incrementing the trailing integer if any
     # ("7.301" → "7.302", "7.303" …). Falls back to "<source>_pN" otherwise.
-    import re
     m = re.match(r"^(.*?)(\d+)$", source_name)
     if m:
         name_prefix, num_str = m.groups()
@@ -983,9 +983,10 @@ def _replicate_layouts_inner(
     # clone (entities + working viewport) — direct COM `Layouts.Add +
     # CopyObjects + AddPViewport` is sabotaged by BricsCAD's layout-init not
     # firing for inactive layouts. Each new sheet ends up identical to source
-    # (viewport shows page-1 of model space). User can manually pan each
-    # viewport to its target page via MVIEW or by activating model space and
-    # using ZOOM CENTER.
+    # (viewport shows page-1 of model space). The view-shift loop below
+    # retargets each clone's viewport via ZOOM WINDOW with explicit corners
+    # (post-D fix — ZOOM CENTER is ambiguous when called from a SendCommand
+    # burst and zooms ~2x farther out than asked).
     cmd_parts: list[str] = []
     new_names: list[str] = []
     for p in range(1, n_pages):     # page 0 IS source; clone for pages 1..n_pages-1

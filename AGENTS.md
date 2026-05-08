@@ -1,4 +1,4 @@
-# CLAUDE.md — Lab Layout Tool cold-start guide
+# AGENTS.md — Lab Layout Tool cold-start guide
 
 Read this first when picking up the project in a new session. Sister docs: [README.md](README.md) for user-facing setup, [PLAN.md](PLAN.md) for phased buildout state and tomorrow's pickup.
 

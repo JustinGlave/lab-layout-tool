@@ -564,7 +564,7 @@ class PBCSection(Panel):
     def refresh_all(self):
         """Re-render PBC state in response to a room valve change.
 
-        Wired into the chain documented in CLAUDE.md:
+        Wired into the chain documented in AGENTS.md:
             CategorySection.changed -> RoomEditor._on_valve_changed
             -> PBCSection.refresh_all -> PBCEditor.refresh_valve_list
 

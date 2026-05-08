@@ -43,5 +43,5 @@ crash_report.txt
 # Project-root PNGs (LLT_Transparent.png etc.) are still tracked.
 blocks/**/*.png
 
-# Local-only Claude / AI tooling
+# Local-only AI agent tooling
 .claude/settings.local.json

@@ -165,7 +165,6 @@ class CategorySection(Panel):
         self._refresh_hint_visibility()
 
     def _populate(self, combo: NoScrollComboBox):
-        from PySide6.QtCore import QSize
         current = combo.currentData()
         combo.blockSignals(True)
         combo.clear()
@@ -174,18 +173,8 @@ class CategorySection(Panel):
             combo.setEnabled(False)
         else:
             combo.setEnabled(True)
-            # Reserve space for thumbnails when at least one variant has one,
-            # so rows in the dropdown line up cleanly. If none have thumbnails,
-            # leave the default tiny iconSize and no horizontal indent appears.
-            any_thumb = any(
-                v.thumbnail_path is not None for v in self._variants
-            )
-            if any_thumb:
-                combo.setIconSize(QSize(48, 32))
             for v in self._variants:
                 combo.addItem(v.label, v)
-                if v.thumbnail_path is not None and v.thumbnail_path.is_file():
-                    combo.setItemIcon(combo.count() - 1, QIcon(str(v.thumbnail_path)))
             if current is not None:
                 idx = combo.findData(current)
                 if idx >= 0:
@@ -216,7 +205,10 @@ class CategorySection(Panel):
             # inserted/removed from the layout (we swap CONTENTS, not widgets),
             # so the captured int stays valid for the row's lifetime.
             row_idx = i - 1
-            up_btn = TertiaryButton("↑")
+            # Use filled triangles instead of ↑↓ — the embedded QSS / dark
+            # theme font renders thin arrow glyphs as a bare vertical bar
+            # on some Windows builds; ▲▼ have wider font coverage.
+            up_btn = TertiaryButton("▲")
             up_btn.setFixedWidth(32)
             up_btn.setMinimumHeight(32)
             up_btn.setToolTip("Move this valve up — affects MSTP chain order")
@@ -224,7 +216,7 @@ class CategorySection(Panel):
                 lambda _checked=False, idx=row_idx: self._move_row(idx, -1)
             )
             row.addWidget(up_btn)
-            down_btn = TertiaryButton("↓")
+            down_btn = TertiaryButton("▼")
             down_btn.setFixedWidth(32)
             down_btn.setMinimumHeight(32)
             down_btn.setToolTip("Move this valve down — affects MSTP chain order")

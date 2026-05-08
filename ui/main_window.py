@@ -165,6 +165,7 @@ class CategorySection(Panel):
         self._refresh_hint_visibility()
 
     def _populate(self, combo: NoScrollComboBox):
+        from PySide6.QtCore import QSize
         current = combo.currentData()
         combo.blockSignals(True)
         combo.clear()
@@ -173,8 +174,18 @@ class CategorySection(Panel):
             combo.setEnabled(False)
         else:
             combo.setEnabled(True)
+            # Reserve space for thumbnails when at least one variant has one,
+            # so rows in the dropdown line up cleanly. If none have thumbnails,
+            # leave the default tiny iconSize and no horizontal indent appears.
+            any_thumb = any(
+                v.thumbnail_path is not None for v in self._variants
+            )
+            if any_thumb:
+                combo.setIconSize(QSize(48, 32))
             for v in self._variants:
                 combo.addItem(v.label, v)
+                if v.thumbnail_path is not None and v.thumbnail_path.is_file():
+                    combo.setItemIcon(combo.count() - 1, QIcon(str(v.thumbnail_path)))
             if current is not None:
                 idx = combo.findData(current)
                 if idx >= 0:

@@ -39,5 +39,9 @@ crash_report.txt
 *.tmp
 *.bak
 
+# Generated block thumbnails (regenerated via tools/generate_thumbnails.py).
+# Project-root PNGs (LLT_Transparent.png etc.) are still tracked.
+blocks/**/*.png
+
 # Local-only Claude / AI tooling
 .claude/settings.local.json

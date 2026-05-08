@@ -65,6 +65,8 @@ echo [1/4] Running PyInstaller...
     --add-data="config;config" ^
     --add-data="blocks;blocks" ^
     --add-data="templates;templates" ^
+    --add-data="jobs/Quick_Test_Building.json;jobs" ^
+    --add-data="jobs/thorough-test.json;jobs" ^
     --collect-submodules=PySide6.QtCore ^
     --collect-submodules=PySide6.QtGui ^
     --collect-submodules=PySide6.QtWidgets ^

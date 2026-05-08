@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint:
+    name: Syntax & import check
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Syntax check all project Python files
+        run: |
+          python -m py_compile app.py
+          python -m py_compile version.py
+          python -m py_compile updater.py
+          python -m py_compile ui/style.py
+          python -m py_compile ui/components.py
+          python -m py_compile ui/main_window.py
+          python -m py_compile ui/pbc.py
+          python -m py_compile cad/blocks.py
+          python -m py_compile cad/layout.py
+          python -m py_compile cad/bricscad.py
+          python -m py_compile cad/pbc.py
+          python -m py_compile cad/migrate.py
+          python -m py_compile tools/embed_qss.py
+          python -m py_compile tools/anchored_refresh.py
+          python -m py_compile tools/generate_pbc_blocks.py
+          python -m py_compile tools/generate_thumbnails.py
+          python -m py_compile tools/inspect_template.py
+          python -m py_compile tools/straighten_polylines.py
+          python -m py_compile tools/generate_psh500a.py
+
+      - name: Version metadata check
+        run: |
+          python -c "from pathlib import Path; ns={}; exec(Path('version.py').read_text(encoding='utf-8'), ns); version=ns['__version__']; readme=Path('README.md').read_text(encoding='utf-8'); build=Path('build.bat').read_text(encoding='utf-8'); installer=Path('installer.iss').read_text(encoding='utf-8'); assert f'Current Version: v{version}' in readme, 'README version does not match version.py'; assert 'findstr' in build and '__version__' in build and 'version.py' in build, 'build.bat must read version.py'; assert '/DMyAppVersion=%VERSION%' in build, 'build.bat must pass VERSION to installer'; assert '#error MyAppVersion' in installer, 'installer.iss must fail without build-provided version'; print(f'version ok: {version}')"
+
+      - name: Import check (catches missing deps and bad top-level code)
+        # GUI modules are excluded — they load Qt platform plugins which
+        # require a real display context even on Windows CI runners.
+        # cad.bricscad / cad.pbc import pythoncom but don't Dispatch at
+        # import time, so they're safe to import on a CI runner without
+        # BricsCAD installed.
+        run: |
+          python -c "import version"
+          python -c "import updater"
+          python -c "from cad import blocks"
+          python -c "from cad import layout"
+          python -c "from cad import migrate"
+          python -c "from cad import bricscad"
+          python -c "from cad import pbc"
+
+      # Regression tests are not yet wired up. When `tests/` exists, replace
+      # this step with `python -m unittest discover -s tests`.
+      - name: Regression tests (placeholder)
+        run: echo "No tests directory yet — TODO when tests/ is added."

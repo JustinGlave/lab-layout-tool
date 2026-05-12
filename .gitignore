@@ -38,6 +38,9 @@ jobs/last_generation.log
 crash_report.txt
 *.tmp
 *.bak
+# BricsCAD per-DWG lock files (created while a DWG is open)
+*.dwl
+*.dwl2
 
 # Generated block thumbnails (regenerated via tools/generate_thumbnails.py).
 # Project-root PNGs (LLT_Transparent.png etc.) are still tracked.

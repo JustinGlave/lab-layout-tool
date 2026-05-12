@@ -21,6 +21,7 @@ from PySide6.QtCore import QDate, QSettings, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QAction, QCursor, QIcon
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
@@ -50,6 +51,7 @@ from cad.blocks import (
     list_variants,
     resolve_block_path,
 )
+from cad.migrate import HOOD_ACCESSORY_KEYS
 from paths import (
     APP_NAME,
     BLOCKS_DIR,
@@ -90,6 +92,15 @@ CATEGORY_LABELS = {
     "AUX": "All Other Exhausts",
 }
 
+# Display labels for per-FEV accessory checkboxes. Keys come from
+# cad.migrate.HOOD_ACCESSORY_KEYS so adding a new accessory only requires
+# two updates (the keys tuple + this label map).
+_HOOD_ACCESSORY_LABELS = {
+    "fhd500": "FHD",
+    "zps": "ZPS",
+    "dhv": "DHV",
+}
+
 
 # ── Category section: count spinner + per-row variant + tag inputs ────────────
 
@@ -102,6 +113,7 @@ class CategorySection(Panel):
     def __init__(self, category: str, title: str, parent=None):
         super().__init__(title=title, parent=parent)
         self.category = category
+        self._is_fev = (category == "FEV")
         self._variants: list[BlockVariant] = []
         self._combos: list[NoScrollComboBox] = []
         self._tags: list[QLineEdit] = []
@@ -110,6 +122,10 @@ class CategorySection(Panel):
         # ↑ and the last row's ↓ so users can't move past either edge.
         self._up_btns: list[TertiaryButton] = []
         self._down_btns: list[TertiaryButton] = []
+        # Per-row accessory checkboxes — populated only for FEV rows. Each
+        # element is a dict {accessory_key: QCheckBox}. Non-FEV rows get an
+        # empty dict so list indices stay aligned with _combos/_tags.
+        self._accessories: list[dict[str, QCheckBox]] = []
 
         body: QVBoxLayout = self.layout()  # provided by Panel
 
@@ -140,6 +156,18 @@ class CategorySection(Panel):
         tag_h = HintLabel("Tag")
         tag_h.setFixedWidth(140)
         header_layout.addWidget(tag_h)
+        # Per-FEV accessory column headers. Each accessory column is the same
+        # width as its row checkbox so the labels stack cleanly. Non-FEV
+        # categories skip these to keep the header tidy.
+        if self._is_fev:
+            for key in HOOD_ACCESSORY_KEYS:
+                acc_h = HintLabel(_HOOD_ACCESSORY_LABELS[key])
+                acc_h.setFixedWidth(60)
+                acc_h.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                acc_h.setToolTip(
+                    "Include this accessory in the hood wiring detail page"
+                )
+                header_layout.addWidget(acc_h)
         # Spacers for the reorder column so the header columns line up with
         # the body rows (each row has up + down buttons at 32px each).
         reorder_h = HintLabel("Order")
@@ -205,6 +233,24 @@ class CategorySection(Panel):
             tag_edit.setFixedWidth(140)
             tag_edit.textChanged.connect(self.changed.emit)
             row.addWidget(tag_edit)
+            # Per-row accessory checkboxes (FEV only). Width matches the
+            # header column so checkboxes align under their labels. Non-FEV
+            # rows still append an empty dict to _accessories so the list
+            # indices stay aligned with _combos / _tags.
+            accessories_for_row: dict[str, QCheckBox] = {}
+            if self._is_fev:
+                for key in HOOD_ACCESSORY_KEYS:
+                    cb = QCheckBox()
+                    cb.setFixedWidth(60)
+                    cb.setMinimumHeight(32)
+                    cb.setToolTip(
+                        f"Include {_HOOD_ACCESSORY_LABELS[key]} accessory "
+                        f"in the hood wiring detail page"
+                    )
+                    cb.stateChanged.connect(self.changed.emit)
+                    row.addWidget(cb, alignment=Qt.AlignmentFlag.AlignCenter)
+                    accessories_for_row[key] = cb
+            self._accessories.append(accessories_for_row)
             # Reorder buttons. Lambdas capture the row index; rows never get
             # inserted/removed from the layout (we swap CONTENTS, not widgets),
             # so the captured int stays valid for the row's lifetime.
@@ -238,6 +284,7 @@ class CategorySection(Panel):
             self._tags.pop()
             self._up_btns.pop()
             self._down_btns.pop()
+            self._accessories.pop()
             row_item = self.rows_layout.takeAt(self.rows_layout.count() - 1)
             _delete_layout(row_item)
         self._header_widget.setVisible(n > 0)
@@ -268,11 +315,24 @@ class CategorySection(Panel):
         b_data = self._combos[target].currentData()
         a_tag = self._tags[idx].text()
         b_tag = self._tags[target].text()
+        # Snapshot accessory state for both rows so a reorder carries each
+        # checkbox along with its row (FEV only; empty dict for other cats).
+        a_acc = {k: cb.isChecked() for k, cb in self._accessories[idx].items()}
+        b_acc = {
+            k: cb.isChecked() for k, cb in self._accessories[target].items()
+        }
 
         # Block change signals during the swap so we emit `changed` once at
-        # the end instead of four times mid-flight.
-        for w in (self._combos[idx], self._combos[target],
-                  self._tags[idx], self._tags[target]):
+        # the end instead of N times mid-flight.
+        accessory_widgets: list[QCheckBox] = [
+            *self._accessories[idx].values(),
+            *self._accessories[target].values(),
+        ]
+        for w in (
+            self._combos[idx], self._combos[target],
+            self._tags[idx], self._tags[target],
+            *accessory_widgets,
+        ):
             w.blockSignals(True)
         try:
             i_for_b = self._combos[idx].findData(b_data)
@@ -283,9 +343,16 @@ class CategorySection(Panel):
                 self._combos[target].setCurrentIndex(t_for_a)
             self._tags[idx].setText(b_tag)
             self._tags[target].setText(a_tag)
+            for k, cb in self._accessories[idx].items():
+                cb.setChecked(b_acc.get(k, False))
+            for k, cb in self._accessories[target].items():
+                cb.setChecked(a_acc.get(k, False))
         finally:
-            for w in (self._combos[idx], self._combos[target],
-                      self._tags[idx], self._tags[target]):
+            for w in (
+                self._combos[idx], self._combos[target],
+                self._tags[idx], self._tags[target],
+                *accessory_widgets,
+            ):
                 w.blockSignals(False)
         self.changed.emit()
 
@@ -293,24 +360,45 @@ class CategorySection(Panel):
         empty = not self._variants and self.count_spin.value() > 0
         self._empty_hint.setVisible(empty)
 
-    def selections(self) -> list[tuple[BlockVariant, str]]:
-        """Return [(variant, tag), ...] for each populated row."""
-        out: list[tuple[BlockVariant, str]] = []
-        for combo, tag_edit in zip(self._combos, self._tags):
+    def selections(self) -> list[tuple[BlockVariant, str, dict]]:
+        """Return [(variant, tag, accessories), ...] for each populated row.
+
+        `accessories` is `{key: bool}` for FEV rows (one entry per
+        HOOD_ACCESSORY_KEYS) and an empty dict for non-FEV categories.
+        """
+        out: list[tuple[BlockVariant, str, dict]] = []
+        for i, (combo, tag_edit) in enumerate(zip(self._combos, self._tags)):
             data = combo.currentData()
             if isinstance(data, BlockVariant):
-                out.append((data, tag_edit.text().strip()))
+                accessories = {
+                    k: cb.isChecked()
+                    for k, cb in self._accessories[i].items()
+                }
+                out.append((data, tag_edit.text().strip(), accessories))
         return out
 
     def set_selections(self, entries: list[dict]):
-        """Apply saved entries from a project JSON: list of dicts with variant_id/label/tag."""
+        """Apply saved entries from a project JSON: list of dicts with
+        variant_id / label / tag / (optional) accessories.
+        """
         self.count_spin.setValue(len(entries))
-        for (combo, tag_edit), entry in zip(zip(self._combos, self._tags), entries):
+        for i, ((combo, tag_edit), entry) in enumerate(
+            zip(zip(self._combos, self._tags), entries)
+        ):
             label = entry.get("label", "")
             idx = combo.findText(label)
             if idx >= 0:
                 combo.setCurrentIndex(idx)
             tag_edit.setText(entry.get("tag", ""))
+            # Apply accessory checkboxes (FEV only; non-FEV entries have no
+            # checkboxes to populate). migrate_project backfills the dict on
+            # load so a saved-but-pre-accessories project still gets defaults.
+            if self._is_fev and i < len(self._accessories):
+                accessories = entry.get("accessories") or {}
+                for key, cb in self._accessories[i].items():
+                    cb.blockSignals(True)
+                    cb.setChecked(bool(accessories.get(key, False)))
+                    cb.blockSignals(False)
 
 
 def _delete_layout(item):
@@ -390,13 +478,18 @@ class RoomEditor(QWidget):
     def collect(self) -> dict:
         room: dict = {"name": self.room_name(), **{cat: [] for cat in CATEGORIES}}
         for cat, sec in self.sections.items():
-            for variant, tag in sec.selections():
-                room[cat].append({
+            for variant, tag, accessories in sec.selections():
+                entry: dict = {
                     "variant_id": variant.variant_id,
                     "label": variant.label,
                     "dwg_path": str(variant.dwg_path),
                     "tag": tag,
-                })
+                }
+                # accessories is empty {} for non-FEV; only persist when
+                # something's there so other categories stay clean.
+                if accessories:
+                    entry["accessories"] = accessories
+                room[cat].append(entry)
         room["pbcs"] = self.pbc_section.collect()
         return room
 

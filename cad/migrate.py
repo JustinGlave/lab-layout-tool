@@ -33,9 +33,26 @@ def migrate_project(data: dict) -> dict:
     """
     if "rooms" not in data:
         data = _v1_to_v2(data)
+    # Backfill accessories dict on FEV entries (added 2026-05-12 for the
+    # hood wiring detail pages). Idempotent — setdefault only fires when
+    # the key is absent, so re-running migrate on an already-migrated dict
+    # is a no-op.
+    for room in data.get("rooms", []) or []:
+        for fev in room.get("FEV", []) or []:
+            fev.setdefault(
+                "accessories",
+                {"fhd500": False, "zps": False, "dhv": False},
+            )
     # Future: if data.get("schema_version", 1) < N: data = _vN_minus_1_to_vN(data)
     data.setdefault("schema_version", CURRENT_SCHEMA_VERSION)
     return data
+
+
+# Hood-detail accessory keys. The data model carries booleans per key on
+# each FEV entry; cad/hood_detail.py reads them at generation time. Add
+# new keys here AND in migrate's setdefault dict above when adding new
+# accessory types.
+HOOD_ACCESSORY_KEYS: tuple[str, ...] = ("fhd500", "zps", "dhv")
 
 
 def _v1_to_v2(v1: dict) -> dict:

@@ -129,7 +129,11 @@ def _find_valve_in_room(room: dict, valve_tag: str) -> dict | None:
     for cat in CATEGORIES:
         for entry in room.get(cat, []) or []:
             if (entry.get("tag", "") or "").strip() == valve_tag:
-                return {"category": cat, **entry}
+                # Spread entry first so the explicit `cat` always wins —
+                # the inverse order (cat first, entry second) would let a
+                # future schema with per-entry "category" silently override
+                # the category we just found this valve under.
+                return {**entry, "category": cat}
     return None
 
 
@@ -362,7 +366,13 @@ def _render_pbc_page(
     n = len(page_pbcs)
     # Slots fill from the left edge — even when the last PBC page has fewer
     # than _PBC_PER_PAGE PBCs, slot positions stay aligned with full pages.
-    slot_denom = max(n, 1) if n >= _PBC_PER_PAGE else _PBC_PER_PAGE
+    # generate_pbc_page slices `paired` into chunks of at most _PBC_PER_PAGE,
+    # so n > _PBC_PER_PAGE would be a programming error (was previously
+    # absorbed silently as cram-tighter spacing).
+    assert n <= _PBC_PER_PAGE, (
+        f"_render_pbc_page expected ≤{_PBC_PER_PAGE} PBCs, got {n}"
+    )
+    slot_denom = _PBC_PER_PAGE
     slot_width = usable_width / slot_denom
 
     trunk_pts: list[tuple[float, float]] = []

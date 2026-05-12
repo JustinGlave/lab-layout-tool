@@ -7,16 +7,6 @@ v0.1.1 published 2026-05-12.
 
 ---
 
-## Immediate
-
-- [ ] **Back up local v0.1.0 install data.** If you have v0.1.0 installed
-  anywhere (work machine, laptop, etc.) with real saved projects in
-  `<install>\_internal\jobs\`, copy those JSONs to
-  `%APPDATA%\ATS Inc\Lab Layout Tool\jobs\` **before** the auto-updater
-  pulls v0.1.1. The G1 fix moves user data to the right place going
-  forward, but the auto-update wipes `_internal/` so any data still
-  there at update time is lost.
-
 ## Substantial (own session each)
 
 - [ ] **F4: function decomposition in `cad/bricscad.py`** (~2 hr) —

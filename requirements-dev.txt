@@ -1,0 +1,9 @@
+# Build / packaging dependencies. Install in addition to requirements.txt
+# when you intend to run build.bat.
+#
+#   .venv\Scripts\pip install -r requirements.txt
+#   .venv\Scripts\pip install -r requirements-dev.txt
+#
+# Pinned so a fresh checkout reproduces the same build artifacts.
+
+pyinstaller==6.20.0

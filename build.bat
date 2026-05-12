@@ -5,13 +5,23 @@ rem ============================================================
 rem build.bat - builds LabLayoutTool .exe + installer + zips
 rem Run this from the project folder: build.bat
 rem Requires:
-rem   pip install pyinstaller
+rem   .venv\Scripts\pip install -r requirements.txt
+rem   .venv\Scripts\pip install -r requirements-dev.txt
 rem   Inno Setup 6 (https://jrsoftware.org/isinfo.php) — optional
 rem ============================================================
 
-rem Read version from version.py
-for /f "tokens=3 delims= " %%v in ('findstr "__version__" version.py') do set "VERSION=%%~v"
-set "VERSION=%VERSION:"=%"
+rem Pre-flight: verify build dependencies are installed in the venv.
+.venv\Scripts\python -c "import PyInstaller" >nul 2>&1
+if errorlevel 1 (
+    echo ERROR: PyInstaller not found in .venv. Install build dependencies:
+    echo        .venv\Scripts\pip install -r requirements-dev.txt
+    exit /b 1
+)
+
+rem Read version from version.py via Python so whitespace / quoting in the
+rem source file can't break the parse (the previous findstr+tokens approach
+rem silently produced an empty VERSION on tab indentation or odd spacing).
+for /f "delims=" %%v in ('.venv\Scripts\python -c "from version import __version__; print(__version__)"') do set "VERSION=%%v"
 
 if not defined VERSION (
     echo ERROR: Could not read version from version.py.

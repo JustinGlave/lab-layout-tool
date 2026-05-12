@@ -31,7 +31,7 @@ def generate(project: dict) -> Path:
     """
     # Lazy-import so the GUI can launch even on machines without pywin32 yet.
     import copy
-    from cad import bricscad, pbc
+    from cad import bricscad, hood_detail, pbc
 
     cfg = blocks.load_config()
     layout = layout_from_config(cfg)
@@ -121,8 +121,16 @@ def generate(project: dict) -> Path:
             if n_pbcs_total else 0
         )
         estimated_room_pages = sum(_estimate_room_pages(r) for r in rooms)
+        # Hood detail pages — one per unique accessory combo across all FEVs.
+        # Computed eagerly so we can size the page budget correctly before
+        # extend_template_pages runs. Pure function over project dict, no
+        # COM calls yet.
+        hood_combos = hood_detail.collect_hood_combos(rooms)
+        n_hood_pages = len(hood_combos)
         # +2 buffer so a room overshooting its estimate still lands on a border
-        total_pages_needed = n_pbc_pages_needed + estimated_room_pages + 2
+        total_pages_needed = (
+            n_pbc_pages_needed + estimated_room_pages + n_hood_pages + 2
+        )
         template_pages = int(layout.page_count)
         if total_pages_needed > template_pages:
             bricscad.extend_template_pages(
@@ -184,14 +192,35 @@ def generate(project: dict) -> Path:
             # Subsequent rooms shift down by the EXTRA pages this room used.
             cumulative_extra += max_local_page
 
+        # Hood wiring detail pages — generated AFTER lab pages so they land
+        # at the bottom of the model-space stack. The product line's blocks_dir
+        # gates whether this feature is even available; if HOOD/ doesn't exist
+        # under it, generate_hood_detail_pages bails gracefully.
+        n_lab_pages = sum(max(np, 1) for np in room_page_counts)
+        starting_hood_page = pbc_pages_drawn + n_lab_pages
+        hood_pages_drawn = 0
+        pid = project.get("product_line")
+        if pid:
+            pls = blocks.product_lines()
+            pl = next((p for p in pls if p.id == pid), None)
+            if pl is not None:
+                hood_blocks_dir = pl.blocks_dir / "HOOD"
+                hood_pages_drawn = hood_detail.generate_hood_detail_pages(
+                    session, project, page_bounds,
+                    page_height=layout.page_height,
+                    hood_blocks_dir=hood_blocks_dir,
+                    starting_page_idx=starting_hood_page,
+                    log_path=log_path,
+                )
+
         # Replicate the paper-space layout for each additional page so every
-        # sheet (PBC pages + lab pages) is printable. update_title_block runs
-        # over ALL layouts so attributes fill on each new sheet automatically.
-        # Each room reserves at least one page slot (placement uses room_idx
-        # for world page); empty rooms count toward the total even though no
-        # valves are drawn on their page.
-        total_pages_actual = pbc_pages_drawn + sum(
-            max(np, 1) for np in room_page_counts
+        # sheet (PBC pages + lab pages + hood detail pages) is printable.
+        # update_title_block runs over ALL layouts so attributes fill on each
+        # new sheet automatically. Each room reserves at least one page slot
+        # (placement uses room_idx for world page); empty rooms count toward
+        # the total even though no valves are drawn on their page.
+        total_pages_actual = (
+            pbc_pages_drawn + n_lab_pages + hood_pages_drawn
         )
         if total_pages_actual > 1:
             bricscad.replicate_paper_space_layouts(
@@ -213,6 +242,9 @@ def generate(project: dict) -> Path:
             # get their name written to the (otherwise blank) page's ROOM: text.
             slots = max(n_pages, 1)
             room_names_expanded.extend([name] * slots)
+        # Hood-page names append after lab pages so update_room_text's
+        # top-to-bottom Y-sort lands them on the right pages.
+        room_names_expanded.extend(hood_detail.hood_page_names(hood_combos))
         bricscad.update_room_text(session, room_names_expanded, log_path=log_path)
 
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

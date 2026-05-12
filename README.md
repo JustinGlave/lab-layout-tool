@@ -1,5 +1,7 @@
 # Lab Layout Tool
 
+[![CI](https://github.com/JustinGlave/lab-layout-tool/actions/workflows/ci.yml/badge.svg)](https://github.com/JustinGlave/lab-layout-tool/actions/workflows/ci.yml)
+
 PySide6 desktop tool that drives BricsCAD via COM to generate 2D as-built lab valve drawings — multi-room projects with metadata, per-valve tags, MSTP wiring, EOL terminators, and an optional PBC network page.
 
 Part of the **ATS Inc. tool suite** — same Phoenix Controls dark-navy design system as Project Tracking Tool and Phoenix Checkout Tool.

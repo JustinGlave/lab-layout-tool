@@ -1,6 +1,11 @@
-# AGENTS.md — Lab Layout Tool cold-start guide
+# CLAUDE.md — Lab Layout Tool cold-start guide
 
 Read this first when picking up the project in a new session. Sister docs: [README.md](README.md) for user-facing setup, [PLAN.md](PLAN.md) for phased buildout state and tomorrow's pickup.
+
+> **2026-05-19 rename note:** this file was previously named `AGENTS.md`.
+> Renamed to `CLAUDE.md` during the Operational Hardening Sprint to
+> standardise across all Phoenix tools per the Phoenix Tools Unified
+> Standard. Content unchanged.
 
 ## What this project is
 

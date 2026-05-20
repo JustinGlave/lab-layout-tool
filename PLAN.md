@@ -93,7 +93,7 @@ Still backlog:
 
 Backlog (ship-related — explicit go required, see feedback memory):
 - Push to `JustinGlave/lab-layout-tool` repo with the suite-standard metadata files.
-- `AGENTS.md` (build commands, gotchas) is in place — see project root.
+- `CLAUDE.md` (build commands, gotchas) is in place — see project root. (Was `AGENTS.md` prior to the 2026-05-19 Operational Hardening Sprint rename.)
 - First GitHub Release — bump `version.py` → 0.1.0, run `build.bat`, attach the three artifacts.
 
 ## Phase 6 — Multi-room project model ✅

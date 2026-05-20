@@ -211,6 +211,7 @@ def generate(project: dict) -> Path:
                     hood_blocks_dir=hood_blocks_dir,
                     starting_page_idx=starting_hood_page,
                     log_path=log_path,
+                    hood_cfg=cfg.get("hood"),
                 )
 
         # Replicate the paper-space layout for each additional page so every
@@ -242,9 +243,9 @@ def generate(project: dict) -> Path:
             # get their name written to the (otherwise blank) page's ROOM: text.
             slots = max(n_pages, 1)
             room_names_expanded.extend([name] * slots)
-        # Hood-page names append after lab pages so update_room_text's
-        # top-to-bottom Y-sort lands them on the right pages.
-        room_names_expanded.extend(hood_detail.hood_page_names(hood_combos))
+        # Hood pages don't participate in update_room_text — their label is
+        # placed directly by generate_hood_detail_pages so the awkward
+        # "ROOM: HOOD WIRING ..." prefix doesn't appear.
         bricscad.update_room_text(session, room_names_expanded, log_path=log_path)
 
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

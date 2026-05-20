@@ -87,6 +87,16 @@
     "SNORKEL_SINGLE": 0,
     "SNORKEL_DOUBLE": 0
   },
+  "hood": {
+    "_comment": "Per-package fume hood wiring detail pages (cad/hood_detail.py). insertion_offset_x/y position the schematic blocks relative to the page's lower-left corner — small positive values inset the schematic from the page edges. insertion_scale shrinks the schematic uniformly (1.0 = no scale; 0.9 = 10% smaller). The CSCP source `Hood Detail w FHD500.dwg` is slightly larger than the page rect at 1:1, so the defaults below scale it ~12% and inset ~30in on each side to leave a comfortable margin. scrub_height_frac is the fraction of page height to clear of template bleed-through (transformer, VA-spec legend) at the top of each hood page. label_height/label_offset_x/y position the 'HOOD WIRING — ...' page-label text relative to the page's upper-left corner.",
+    "insertion_offset_x": 30.0,
+    "insertion_offset_y": 30.0,
+    "insertion_scale": 0.88,
+    "scrub_height_frac": 0.15,
+    "label_height": 18.0,
+    "label_offset_x": 50.0,
+    "label_offset_y": -20.0
+  },
   "mstp": {
     "_comment": "Per-variant ACM/comm-bus port offsets, originally hand-measured then refreshed via tools/anchored_refresh.py (run after any straighten_polylines pass that may have nudged rail vertices). 'in_offset' missing on _START variants because they begin the comm trunk and have no IN port. wire_width is the polyline width to draw (matches the existing rail at 1 7/8\").",
     "enabled": true,

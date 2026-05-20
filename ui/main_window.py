@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QProgressDialog,
     QScrollArea,
@@ -838,6 +839,13 @@ class MainWindow(QMainWindow):
         # tab bar past the panel width and forcing horizontal scroll arrows.
         self.room_tabs.tabBar().setElideMode(Qt.TextElideMode.ElideRight)
         self.room_tabs.currentChanged.connect(self._refresh_tree)
+        # Right-click a tab → context menu with "Delete this room" action.
+        # Mirrors the existing destructive-removal confirmation in
+        # _sync_rooms_to_count (when the spinbox is decremented), so the same
+        # user-data safeguards apply regardless of how the room is removed.
+        tab_bar = self.room_tabs.tabBar()
+        tab_bar.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        tab_bar.customContextMenuRequested.connect(self._on_room_tab_context_menu)
         editor_layout.addWidget(self.room_tabs, 1)
 
         editor_scroll.setWidget(editor_inner)
@@ -944,6 +952,54 @@ class MainWindow(QMainWindow):
             if data.get(cat):
                 return True
         return False
+
+    def _on_room_tab_context_menu(self, pos):
+        """Right-click on a room tab → show "Delete this room" menu.
+
+        Confirms before deleting if the room has user data. Refuses to
+        delete when there's only one room (need at least one). After
+        deletion, syncs the room_count spinbox without re-triggering the
+        destructive-removal prompt (we already confirmed once).
+        """
+        tab_bar = self.room_tabs.tabBar()
+        idx = tab_bar.tabAt(pos)
+        if idx < 0:
+            return  # right-click landed off any tab
+
+        menu = QMenu(self)
+        delete_action = menu.addAction("Delete this room")
+        if self.room_tabs.count() <= 1:
+            delete_action.setEnabled(False)
+            delete_action.setText("Delete this room (project needs ≥1)")
+        chosen = menu.exec(tab_bar.mapToGlobal(pos))
+        if chosen is not delete_action:
+            return
+
+        room = self.room_tabs.widget(idx)
+        label = self.room_tabs.tabText(idx) or f"Room {idx + 1}"
+        if isinstance(room, RoomEditor) and self._room_has_data(room):
+            resp = QMessageBox.question(
+                self,
+                "Delete room?",
+                f"'{label}' contains valves or PBCs.\n\n"
+                f"Deleting this room will permanently discard its contents. "
+                f"Continue?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if resp != QMessageBox.StandardButton.Yes:
+                return
+
+        # Remove the tab + widget, then sync the spinbox without firing
+        # _sync_rooms_to_count (which would re-prompt about the discarded room).
+        self.room_tabs.removeTab(idx)
+        if room is not None:
+            room.deleteLater()
+        self.room_count.blockSignals(True)
+        self.room_count.setValue(self.room_tabs.count())
+        self.room_count.blockSignals(False)
+        self._refresh_tree()
+        self.statusBar().showMessage(f"Deleted {label}", 5000)
 
     def _on_room_changed(self):
         """Slot for RoomEditor.changed (anything inside the room form).

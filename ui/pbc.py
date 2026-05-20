@@ -157,7 +157,9 @@ class PBCEditor(QWidget):
 
         valves: list[tuple[str, str, str]] = []  # (tag, variant_label, category)
         for cat in CATEGORIES:
-            for variant, tag in self._room.sections[cat].selections():
+            # selections() returns (variant, tag, accessories) 3-tuples post-H3.
+            # PBC linking doesn't care about FEV accessories, so discard them.
+            for variant, tag, _accessories in self._room.sections[cat].selections():
                 valves.append((tag.strip(), variant.label, cat))
 
         # Toggle the empty-state hint vs the table based on what the room has

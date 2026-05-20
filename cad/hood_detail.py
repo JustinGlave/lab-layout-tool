@@ -48,6 +48,7 @@ from pathlib import Path
 from .bricscad import (
     CadSession,
     _log_swallowed,
+    _variant_point,
     insert_block,
 )
 from .migrate import HOOD_ACCESSORY_KEYS
@@ -114,6 +115,69 @@ _ACCESSORY_DISPLAY = {
 }
 
 
+def _scrub_hood_page_top(
+    session: CadSession,
+    page_bounds: tuple[float, float, float, float],
+    page_y_min: float,
+    page_y_max: float,
+    scrub_height_frac: float,
+    notes: list[str],
+) -> int:
+    """Delete template bleed-through (VA-spec text, transformer block, etc.)
+    from the upper strip of one hood page. Preserves the page border and
+    title block — both extend below the strip's bottom so the "strict
+    containment in [scrub_y_min, page_y_max]" check skips them.
+
+    `page_y_min/page_y_max` are this page's world-coord Y bounds (already
+    offset by the page index — caller's responsibility).
+
+    `scrub_height_frac` = fraction of page height to scrub from the top.
+    0.15 (top 15%) clears the VA-spec legend and transformer area on a
+    typical CSCP template; tune via the `hood.scrub_height_frac` config
+    knob if a future template has different positioning.
+    """
+    x_min, x_max, _, _ = page_bounds
+    scrub_y_min = page_y_min + (page_y_max - page_y_min) * (1.0 - scrub_height_frac)
+
+    swallow_notes: list[str] = []
+    to_delete: list = []
+    for ent in session.model_space:
+        try:
+            minp, maxp = ent.GetBoundingBox()
+            bx_min, by_min = float(minp[0]), float(minp[1])
+            bx_max, by_max = float(maxp[0]), float(maxp[1])
+        except Exception as exc:  # noqa: BLE001
+            _log_swallowed(
+                "scrub_hood_page.bbox-read", exc, notes=swallow_notes,
+            )
+            continue
+        # Strict containment — preserves anything that extends past the
+        # page edges (border) or below the scrub strip (title block).
+        if bx_min < x_min or bx_max > x_max:
+            continue
+        if by_min < scrub_y_min or by_max > page_y_max:
+            continue
+        to_delete.append(ent)
+
+    deleted = 0
+    for ent in to_delete:
+        try:
+            ent.Delete()
+            deleted += 1
+        except Exception as exc:  # noqa: BLE001
+            _log_swallowed("scrub_hood_page.delete", exc, notes=swallow_notes)
+
+    if deleted or swallow_notes:
+        notes.append(
+            f"    scrubbed {deleted} template entit"
+            f"{'ies' if deleted != 1 else 'y'} from upper strip "
+            f"(y in [{scrub_y_min:.0f}, {page_y_max:.0f}])"
+        )
+        notes.extend(f"    {n}" for n in swallow_notes)
+
+    return deleted
+
+
 def generate_hood_detail_pages(
     session: CadSession,
     project: dict,
@@ -122,6 +186,7 @@ def generate_hood_detail_pages(
     hood_blocks_dir: Path,
     starting_page_idx: int,
     log_path: Path | None = None,
+    hood_cfg: dict | None = None,
 ) -> int:
     """Insert one hood detail page per unique accessory combo across all
     FEVs in the project.
@@ -170,22 +235,44 @@ def generate_hood_detail_pages(
     x_min, x_max, y_min, y_max = page_bounds
     notes: list[str] = []
 
+    # Config knobs (defaults match the CSCP source layout as shipped).
+    hood_cfg = hood_cfg or {}
+    insertion_offset_x = float(hood_cfg.get("insertion_offset_x", 0.0))
+    insertion_offset_y = float(hood_cfg.get("insertion_offset_y", 0.0))
+    insertion_scale = float(hood_cfg.get("insertion_scale", 1.0))
+    scrub_height_frac = float(hood_cfg.get("scrub_height_frac", 0.15))
+    label_height = float(hood_cfg.get("label_height", 18.0))
+    label_offset_x = float(hood_cfg.get("label_offset_x", 50.0))
+    label_offset_y = float(hood_cfg.get("label_offset_y", -30.0))
+
     for combo_idx, (combo, tags) in enumerate(combos):
         world_page_idx = starting_page_idx + combo_idx
         page_y_offset = -world_page_idx * float(page_height)
-        # Anchor for inserting the schematic blocks. All 4 source DWGs were
-        # saved at the same world origin, so inserting each at the same
-        # (ins_x, ins_y) reconstructs the original wiring layout.
-        # Page x_min / y_min give us the lower-left corner of this page in
-        # world coords; the source DWG's content is positioned around the
-        # source's modelspace origin, which we map onto the page lower-left.
-        ins_x = float(x_min)
-        ins_y = float(y_min) + page_y_offset
+        page_y_min = float(y_min) + page_y_offset
+        page_y_max = float(y_max) + page_y_offset
+
+        # 1. Scrub template bleed-through in the upper strip BEFORE inserting
+        #    schematic blocks — the schematic doesn't exist yet, so the
+        #    scrub can't damage it; only template content (VA-spec legend,
+        #    transformer) ends up deleted.
+        _scrub_hood_page_top(
+            session, page_bounds,
+            page_y_min=page_y_min, page_y_max=page_y_max,
+            scrub_height_frac=scrub_height_frac, notes=notes,
+        )
+
+        # 2. Insert the schematic. Anchor for inserting the blocks — all 4
+        #    source DWGs were saved at the same world origin, so inserting
+        #    each at the same (ins_x, ins_y) reconstructs the original
+        #    wiring layout. insertion_offset_x/y come from config so the
+        #    schematic can be positioned without editing the source DWGs.
+        ins_x = float(x_min) + insertion_offset_x
+        ins_y = page_y_min + insertion_offset_y
 
         # Always insert the ACM. Failure here is fatal for this page — skip
         # to the next combo so the rest of the pages still render.
         try:
-            insert_block(session, acm_path, ins_x, ins_y)
+            insert_block(session, acm_path, ins_x, ins_y, scale=insertion_scale)
         except Exception as exc:  # noqa: BLE001
             _log_swallowed(
                 f"hood_detail.acm[combo{combo_idx + 1}]", exc, notes=notes,
@@ -195,18 +282,39 @@ def generate_hood_detail_pages(
             )
             continue
 
-        # Insert each enabled accessory at the same anchor.
+        # Insert each enabled accessory at the same anchor with the same
+        # scale so the schematic remains internally consistent.
         for key in HOOD_ACCESSORY_KEYS:
             if key not in combo:
                 continue
             try:
-                insert_block(session, accessory_paths[key], ins_x, ins_y)
+                insert_block(
+                    session, accessory_paths[key], ins_x, ins_y,
+                    scale=insertion_scale,
+                )
             except Exception as exc:  # noqa: BLE001
                 _log_swallowed(
                     f"hood_detail.{key}[combo{combo_idx + 1}]",
                     exc,
                     notes=notes,
                 )
+
+        # 3. Add page label text at the top of the page. Placed AFTER the
+        #    scrub so it doesn't get caught in the cleanup. Uses a plain
+        #    "HOOD WIRING — ..." prefix (no ROOM: prefix) — the hood page
+        #    skips update_room_text's ROOM:-prefix walk.
+        label_x = float(x_min) + label_offset_x
+        label_y = page_y_max + label_offset_y
+        try:
+            session.model_space.AddText(
+                combo_label(combo, tags),
+                _variant_point(label_x, label_y),
+                label_height,
+            )
+        except Exception as exc:  # noqa: BLE001
+            _log_swallowed(
+                f"hood_detail.label[combo{combo_idx + 1}]", exc, notes=notes,
+            )
 
         notes.append(
             f"  combo {combo_idx + 1} (page {world_page_idx + 1}): "
@@ -231,15 +339,3 @@ def generate_hood_detail_pages(
     return len(combos)
 
 
-def hood_page_names(combos: list[tuple[frozenset[str], list[str]]]) -> list[str]:
-    """Returns one room-text-slot name per hood page.
-
-    Caller appends these to `room_names_expanded` in app.py so
-    `update_room_text` populates the "ROOM:" text slot on each hood page
-    with the combo label (e.g., "HOOD WIRING — FHD500, ZPS: HOOD 1, HOOD 5").
-
-    The "ROOM:" prefix prepended by `update_room_text` is awkward on hood
-    pages but functional for v1; a future refinement could give that
-    function a per-name prefix override.
-    """
-    return [combo_label(combo, tags) for combo, tags in combos]

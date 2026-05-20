@@ -18,6 +18,24 @@ if errorlevel 1 (
     exit /b 1
 )
 
+rem Pre-flight: verify the phoenix-commons submodule is initialised
+rem (ADR-015 — submodule + editable install is the official transport).
+rem A fresh clone needs `git submodule update --init --recursive` before
+rem `pip install -r requirements.txt` can resolve the `-e ./commons` line.
+if not exist "commons\src\phoenix_commons\__init__.py" (
+    echo.
+    echo ERROR: phoenix-commons submodule missing. Run:
+    echo        git submodule update --init --recursive
+    echo        .venv\Scripts\pip install -r requirements.txt
+    exit /b 1
+)
+.venv\Scripts\python -c "import phoenix_commons" >nul 2>&1
+if errorlevel 1 (
+    echo ERROR: phoenix_commons not importable from .venv. Re-install:
+    echo        .venv\Scripts\pip install -e .\commons
+    exit /b 1
+)
+
 rem Read version from version.py via Python so whitespace / quoting in the
 rem source file can't break the parse (the previous findstr+tokens approach
 rem silently produced an empty VERSION on tab indentation or odd spacing).
@@ -43,21 +61,16 @@ if errorlevel 1 (
     exit /b 1
 )
 
-.venv\Scripts\python -m py_compile version.py app.py updater.py ui\style.py ui\components.py ui\main_window.py ui\pbc.py cad\blocks.py cad\layout.py cad\bricscad.py cad\pbc.py cad\migrate.py
+.venv\Scripts\python -m py_compile version.py app.py paths.py updater.py ui\style.py ui\components.py ui\main_window.py ui\pbc.py cad\blocks.py cad\layout.py cad\bricscad.py cad\pbc.py cad\migrate.py
 if errorlevel 1 (
     echo.
     echo ERROR: Python compile check failed.
     exit /b 1
 )
-rem Sync ui/style.py:_EMBEDDED_QSS from phoenix_style.qss so a frozen .exe
-rem with no _internal/phoenix_style.qss falls back to the current styling.
-rem Exit code 0 = already in sync, 1 = rewrote, 2 = error.
-.venv\Scripts\python tools\embed_qss.py
-if errorlevel 2 (
-    echo.
-    echo ERROR: tools\embed_qss.py failed; see message above.
-    exit /b 1
-)
+rem Phase 3A retrofit: tools\embed_qss.py was retired. Commons owns the
+rem canonical QSS + the generated embedded fallback (per phase 2.1) +
+rem the brand-profile sentinel substitution (per ADR-016). PyInstaller's
+rem --collect-all phoenix_commons (below) bundles them into _internal/.
 echo [0/4] Sanity checks passed.
 echo.
 
@@ -69,7 +82,6 @@ echo [1/4] Running PyInstaller...
     --windowed ^
     --icon=LLT_Normal.ico ^
     --name=LabLayoutTool ^
-    --add-data="phoenix_style.qss;." ^
     --add-data="LLT_Normal.ico;." ^
     --add-data="LLT_Transparent.png;." ^
     --add-data="config;config" ^
@@ -77,6 +89,7 @@ echo [1/4] Running PyInstaller...
     --add-data="templates;templates" ^
     --add-data="jobs/Quick_Test_Building.json;jobs" ^
     --add-data="jobs/thorough-test.json;jobs" ^
+    --collect-all=phoenix_commons ^
     --collect-submodules=PySide6.QtCore ^
     --collect-submodules=PySide6.QtGui ^
     --collect-submodules=PySide6.QtWidgets ^

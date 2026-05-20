@@ -23,8 +23,17 @@ constant for the right purpose:
     PROJECT_ROOT / "blocks" / ...       # read-only — bundled valve blocks
     PROJECT_ROOT / "config" / ...       # read-only — bundled config
 
-This module has zero non-stdlib dependencies so it's safe to import from
-anywhere (cad/, ui/, tools/, app.py).
+Phase 3A retrofit: ``is_frozen`` now imports from
+:mod:`phoenix_commons.paths`. The user-data resolution stays app-local
+because Phoenix CAD's source-mode policy (writable data → repo root)
+differs from commons's default (writable data → ``%APPDATA%`` always —
+intended for tools where dev runs should share the installed-tool's
+state). Per MIGRATION_RULES.md § Drift-vs-extension heuristic, this is
+an app-local extension that uses commons primitives — not drift.
+
+This module has zero non-stdlib dependencies beyond ``phoenix_commons.paths``
+(itself stdlib-only), so it remains safe to import from anywhere (cad/,
+ui/, tools/, app.py).
 """
 
 from __future__ import annotations
@@ -33,15 +42,12 @@ import os
 import sys
 from pathlib import Path
 
+from phoenix_commons.paths import is_frozen
+
 ORG_NAME = "ATS Inc"
 APP_NAME = "Lab Layout Tool"
 
 _SOURCE_ROOT = Path(__file__).resolve().parent
-
-
-def is_frozen() -> bool:
-    """True when running as a PyInstaller bundle."""
-    return getattr(sys, "frozen", False)
 
 
 def _resolve_user_data() -> Path:
@@ -76,3 +82,12 @@ FIXTURES_DIR = PROJECT_ROOT / "jobs"  # test JSON fixtures bundled by build.bat
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
 BLOCKS_DIR = PROJECT_ROOT / "blocks"
 CONFIG_PATH = PROJECT_ROOT / "config" / "product_lines.json"
+
+
+__all__ = [
+    "ORG_NAME", "APP_NAME",
+    "is_frozen",
+    "USER_DATA_DIR", "PROJECT_ROOT",
+    "JOBS_DIR", "OUTPUT_DIR", "LAST_GEN_LOG",
+    "FIXTURES_DIR", "TEMPLATES_DIR", "BLOCKS_DIR", "CONFIG_PATH",
+]

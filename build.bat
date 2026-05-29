@@ -10,6 +10,16 @@ rem   .venv\Scripts\pip install -r requirements-dev.txt
 rem   Inno Setup 6 (https://jrsoftware.org/isinfo.php) — optional
 rem ============================================================
 
+rem Python 3.12 soft-warn (FROZEN_BUILD_BASELINE / ADR-014)
+for /f "tokens=2" %%P in ('.venv\Scripts\python --version 2^>^&1') do set PYTHON_VERSION=%%P
+echo Detected venv Python: %PYTHON_VERSION%
+echo %PYTHON_VERSION% | findstr /b "3.12." >nul
+if errorlevel 1 (
+    echo WARNING: Canonical frozen-build venv is Python 3.12 per ADR-014 / FROZEN_BUILD_BASELINE.
+    echo          Current interpreter is %PYTHON_VERSION%. Build will proceed but the
+    echo          S1-safe bootloader profile is only verified on 3.12.
+)
+
 rem Pre-flight: verify build dependencies are installed in the venv.
 .venv\Scripts\python -c "import PyInstaller" >nul 2>&1
 if errorlevel 1 (
@@ -51,8 +61,10 @@ echo  Building Lab Layout Tool v%VERSION%
 echo ============================================================
 echo.
 
-rem Step 0: sanity checks + sync embedded QSS from source
-echo [0/4] Running sanity checks...
+rem Step 0: sanity checks + full cleanup (FROZEN_BUILD_BASELINE)
+echo [0/4] Running sanity checks + full cleanup...
+if exist dist  rmdir /s /q dist
+if exist build rmdir /s /q build
 findstr /C:"Current Version: v%VERSION%" README.md >nul
 if errorlevel 1 (
     echo.
@@ -80,6 +92,7 @@ echo [1/4] Running PyInstaller...
     --noconfirm ^
     --onedir ^
     --windowed ^
+    --noupx ^
     --icon=LLT_Normal.ico ^
     --name=LabLayoutTool ^
     --add-data="LLT_Normal.ico;." ^
@@ -96,6 +109,14 @@ echo [1/4] Running PyInstaller...
     --hidden-import=win32com ^
     --hidden-import=win32com.client ^
     --hidden-import=pythoncom ^
+    --exclude-module=tkinter ^
+    --exclude-module=_tkinter ^
+    --exclude-module=tcl ^
+    --exclude-module=tk ^
+    --exclude-module=lib2to3 ^
+    --exclude-module=idlelib ^
+    --exclude-module=turtle ^
+    --exclude-module=turtledemo ^
     app.py
 
 if errorlevel 1 (

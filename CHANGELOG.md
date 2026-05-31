@@ -10,7 +10,20 @@ behaviour changes until v1.0.0.
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-05-30
+
+Release hardening — no functional changes.
+
 ### Changed
+- **Build pipeline aligned with FROZEN_BUILD_BASELINE** (release
+  hardening, 2026-05-29 → merged 2026-05-30). `build.bat` now
+  enforces Python 3.12 soft-warn + Step 0 full cleanup
+  (`rmdir /s /q dist build`) + `--noupx` + 8× stdlib
+  `--exclude-module` (tkinter/tcl/tk/lib2to3/idlelib/turtle/
+  turtledemo) at PyInstaller invocation. S1-safe profile per
+  ADR-014 / FROZEN_BUILD_BASELINE.md. No app source / theme /
+  widget / updater / installer changes. AppId behavior, install
+  path, user-data path, and updater zip naming all preserved.
 - **Phase 3A retrofit (2026-05-19)**: migrated to commons-backed
   pattern per ADR-015 (`phoenix-commons` git submodule + editable
   install). Theme + widgets + paths + updater now flow through

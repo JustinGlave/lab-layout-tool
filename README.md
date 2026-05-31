@@ -6,7 +6,7 @@ PySide6 desktop tool that drives BricsCAD via COM to generate 2D as-built lab va
 
 Part of the **ATS Inc. tool suite** — same Phoenix Controls dark-navy design system as Project Tracking Tool and Phoenix Checkout Tool.
 
-Current Version: v0.1.1
+Current Version: v0.1.2
 
 ## Quick start
 
